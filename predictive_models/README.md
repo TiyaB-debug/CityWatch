@@ -1,38 +1,54 @@
-# CityWatch inspection pilot
+# CityWatch predictive models
 
-CityWatch recommends roughly 500 m NYC grid cells for street inspections. The pilot trains on **August 2025** and evaluates against reported cyclist injury collisions in **September 2025**.
+CityWatch helps planners decide which Manhattan areas to inspect when they can visit only five or ten locations. The analysis separates historical patterns, borough-wide forecasts, and predictions for individual street areas.
 
-## Interactive map
+## Datathon evaluation and working prototype
 
-Download [citywatch_map.html](lab/results/citywatch_map.html) and open it in a browser. The map uses Leaflet and OpenStreetMap online. Adjust the September date range, select wet, dry, or warm conditions, restrict rankings to the visible map area, and choose five or ten inspections. Each recommendation shows its predicted count or baseline score, August injury history, and weather evidence.
+The competition run uses the two organizer-provided **NYC crash and NOAA weather files**. It fits on **August 2025**, ranks roughly 500 m citywide cells, and checks reported cyclist injury collisions in **September 2025**. The baseline ranks by August injury collision counts. The matched Poisson models use the same crash-history and calendar inputs, with weather added in one version. September observations serve as a simulated forecast. [Organizer dataset repository](https://github.com/rutgersdsc/nyc-in-motion)
 
-The blue layer shows August vehicle collision activity. The red layer shows August cyclist injury collisions. A separate September outcome layer follows the date range and is available for retrospective review. The pilot uses no Citi Bike data, so the blue layer measures reported collisions. September weather is an observed-weather forecast replay.
+Out of 567 September cyclist injury collisions, the August baseline and both Poisson models captured **3** at five inspections. At ten, the baseline captured **6** and both Poisson models captured **5**. Weather did not improve matched Poisson capture at either budget. The denominator includes reported events without usable coordinates. [Exact results](datathon/backtest.json)
 
-## Models and individual figures
+Download [the interactive prototype](datathon/citywatch_map.html) and open it in a browser. It offers date, weather, map area, model, and budget controls and shows the evidence behind each ranked cell. Leaflet and map tiles require internet access. The activity layer shows reported crashes. Citi Bike and 311 are excluded from this competition run.
 
-- **August collision baseline** ranks cells by August cyclist injury collision count alone. [Code](lab/models/baselines.py) · [Figure](lab/results/figures/baseline.png)
-- **Poisson without weather** estimates daily counts from cell, station region, weekend status, and August non-cyclist-injury collision activity. [Code](lab/models/poisson.py) · [Figure](lab/results/figures/no_weather.png)
-- **Poisson with weather** adds rainfall, temperature, and station-level wet-day effects to the same inputs. Comparing the two Poisson variants tests the contribution of weather. [Figure](lab/results/figures/with_weather.png)
-- **Wet/dry collision rates** estimate cell-level August rates for wet and dry days, with smoothing from the broader August history. [Code](lab/models/weather_rates.py) · [Figure](lab/results/figures/weather_rates.png)
+To reproduce this comparison, install the dependencies below and run `bash predictive_models/datathon/reproduce.sh`. The script verifies the organizer file checksums and reuses the [pinned pilot code](https://github.com/TiyaB-debug/CityWatch/tree/f41b1db983f22446cee70df3057016b9485816c7/predictive_models/lab). In a shallow clone, fetch history with `git fetch --unshallow` first. Outputs go to `predictive_models/output/datathon` unless a different output directory is supplied.
 
-## September evaluation
+The Manhattan figures below use a broader historical snapshot. They are exploratory and separate from the organizer-data evaluation. The prototype supports area-level inspection planning. Consumer route warnings would require route and exposure data. Field inspection determines whether and how to intervene.
 
-The August dataset establishes 2,063 candidate cells. Models sum daily predictions over September and make one shortlist for each budget. The denominator is all **467** reported September cyclist injury collisions, including those without usable coordinates or outside the candidate cells.
+## Figures for the presentation
 
-- **Five locations.** August baseline **2 of 467 (0.43%)**, Poisson without weather **2 (0.43%)**, Poisson with weather **2 (0.43%)**, and wet/dry rates **1 (0.21%)**.
-- **Ten locations.** August baseline **4 of 467 (0.86%)**, Poisson without weather **3 (0.64%)**, Poisson with weather **5 (1.07%)**, and wet/dry rates **5 (1.07%)**.
+1. [Weather, collision heat map, and 311](presentation/results/manhattan_story.png). Read this left to right. Weather describes when reported counts change, the heat map shows where crashes have clustered, and 311 adds context for where to look.
+2. [Clustering map and profiles](presentation/results/clustering.png). K-means grouped 278 cells by vehicle collisions, cyclist injury collisions, and relevant DOT complaints. Two groups gave the highest silhouette score (0.64), with 67 and 211 cells. They describe differences in recorded activity and reporting volume.
+3. [Monthly time-series forecast](presentation/results/time_series.png). This shows the observed monthly totals, a six-month holdout from May through October 2026, and three projected months. Repeating the same month last year had a lower mean absolute error (**18.3 collisions/month**) than Holt–Winters (**41.4**).
+4. [Individual inspection forecast figures](forecast/results/figures/). Use these to explain which cells the models would prioritize and how many reported injury collisions the shortlists captured on later data.
 
-Weather-aware Poisson captured one more collision than the baseline and two more than matched Poisson without weather at ten locations. It tied both at five. These small counts describe one two-month pilot. [Machine-readable results](lab/results/backtest.json)
+### What to say
 
-[Daily weather-aware predictions CSV](lab/results/daily_with_weather_sep_2025.csv) contains all **61,890** candidate cell-days with `cell_id`, `latitude`, `longitude`, `date`, and `with_weather`.
+Temperature had a moderate positive correlation with Manhattan's daily reported cyclist injury collisions (**r = +0.43**). The linear correlation with rainfall was near zero (**r = −0.05**). The adjusted model estimated about **11% fewer reported collisions on heavy-rain days** than on dry days. These counts do not measure risk per ride.
 
-## Data and scope
+Cells with at least three relevant DOT complaints in the previous month had about **9.1 times** the following month's reported injury collision count of cells with zero complaints, after adjusting for prior injury collisions and calendar month. Busy streets and differences in reporting may contribute to that relationship. 311 is used in the historical analysis and clustering. Its impact on the inspection forecast remains untested.
 
-- [NYC Open Data collision reports](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95/about_data) supply the labels. A collision counts once when at least one cyclist was reported injured. The pipeline uses only August and September 2025 from the repository's larger snapshot.
-- [NOAA daily summaries](https://www.ncei.noaa.gov/access/search/datasets/daily-summaries/) supply daily rainfall and temperature. Each cell uses the nearest of Central Park, LaGuardia, or JFK.
-- [NYC borough outlines](https://data.cityofnewyork.us/City-Government/Borough-Boundaries/gthc-hcne) provide map context. The optional [311 source downloader](../Datasets/311/) remains available for future analysis.
+At ten inspections per month in the July–October 2026 holdout, the prior-month baseline captured **43 of 657** reported injury collisions. The validation-selected boosted model without weather captured **53**. At five locations it captured **27**, compared with **22** for the baseline. The best observed ten-location count was **60** for both regularized Poisson variants. The holdout comparison is exploratory.
 
-The prototype supports planner review of areas for inspection. Its police reports are subject to reporting and geocoding gaps. Consumer route warnings require route and cycling exposure data. Field inspections would determine appropriate repairs.
+## Model files and outputs
+
+- [Weather association model](models/weather.py) fits adjusted Poisson rate ratios for rainfall and temperature. [Estimates](presentation/results/numbers.json)
+- [Clustering model](models/clustering.py) compares K-means with two through six groups using silhouette scores. It fits standardized log counts on January 2023–October 2026 records. [Cell assignments](presentation/results/cluster_assignments.csv)
+- [Time-series model](models/time_series.py) evaluates additive Holt–Winters with annual seasonality against the same month last year.
+- [Inspection forecast models](models/inspection.py) contain regularized and boosted Poisson models with matched weather comparisons. [Backtest](forecast/results/backtest.json) · [Daily forecasts](forecast/results/daily_forecasts.csv) · [Scenario weather](forecast/results/forecast_weather.csv)
+
+The analysis uses overlapping crash and weather dates from January 1, 2023 through November 3, 2026. The time series excludes partial November from its observed monthly totals. The inspection forecasts use earlier data for training and later months for validation and testing. The included November 8–14 forward run uses simulated weather, and the runner accepts a future station-day CSV. Citi Bike is excluded.
+
+[NYC crash reports](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95/about_data) · [NOAA station data](https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt) · [NYC 311 service requests](https://data.cityofnewyork.us/Social-Services/311-Service-Requests-from-2020-to-Present/erm2-nwe9/about_data) · [NYC borough boundaries](https://data.cityofnewyork.us/City-Government/Borough-Boundaries/gthc-hcne)
+
+The presentation's [311 input](presentation/inputs/manhattan_dot_311_monthly.csv.gz) contains monthly grid counts of geocoded Manhattan DOT street condition, street light, bike lane, and sidewalk condition complaints. It contains no individual request rows.
+
+## Folder guide
+
+- [datathon/](datathon/) contains the organizer-data evaluation, map, and reproduction command.
+- [models/](models/) contains the weather, clustering, time-series, and inspection model definitions.
+- [data.py](data.py) and [inputs/](inputs/) handle shared crash and weather preparation, including the Manhattan boundary.
+- [presentation/](presentation/) contains the figure builder, aggregated 311 input, and presentation outputs.
+- [forecast/](forecast/) contains the training and scoring runner, individual forecast figures, and validation results.
 
 ## Reproduce
 
@@ -40,8 +56,15 @@ From the repository root:
 
 ```sh
 python3 -m pip install -r predictive_models/requirements.txt
-python3 predictive_models/lab/train.py \
+python3 predictive_models/presentation/build.py \
   --crashes Datasets/nyc_crashes_2023-01-01_to_2026-11-07.csv.gz \
-  --weather predictive_models/lab/inputs/noaa_aug_sep_2025.csv \
-  --out predictive_models/lab/results
+  --weather-dir Datasets/Weather
+
+python3 predictive_models/forecast/run.py \
+  --crashes Datasets/nyc_crashes_2023-01-01_to_2026-11-07.csv.gz \
+  --weather-dir Datasets/Weather \
+  --scenario-start 2026-11-08 \
+  --out predictive_models/forecast/results
 ```
+
+To score real forecast weather, replace `--scenario-start` with `--forecast path/to/weather.csv`. Supply `date`, `station`, `rain_mm`, and `temperature_c` for each future day within one calendar month and all three stations (`USW00094728`, `USW00014732`, `USW00094789`).
