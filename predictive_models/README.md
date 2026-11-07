@@ -11,12 +11,28 @@ CityWatch ranks roughly 500 m NYC grid cells for weekly street inspections. The 
 - [Gradient boosting](lab/models/gradient_boosting.py) estimates that probability with trees trained in sequence. The full version uses crash history, weather, 311 complaints, and Citi Bike activity. Four variants remove weather, 311, or Citi Bike one at a time, or use crash history and calendar features only. These comparisons show how much each input adds to this model.
 - [Historical baselines](lab/models/baselines.py) rank cells by their 13-week or 52-week injury collision counts. They provide a benchmark at each inspection budget.
 
+## Individual model visuals
+
+Each standalone figure shows the top 10 inspection cells for three holdout weeks and a cumulative capture chart for budgets of 5, 10, and 20 cells per week. Filled cells had at least one reported cyclist injury collision that week. [NYC borough outlines](https://data.cityofnewyork.us/City-Government/Borough-Boundaries/gthc-hcne)
+
+- [Poisson regression](lab/results/figures/poisson.png)
+- [Logistic regression](lab/results/figures/logistic.png)
+- [Random forest](lab/results/figures/random_forest.png)
+- [Extra trees](lab/results/figures/extra_trees.png)
+- [Gradient boosting](lab/results/figures/gradient_boost.png)
+- [Boosting without weather](lab/results/figures/boost_without_weather.png)
+- [Boosting without 311](lab/results/figures/boost_without_311.png)
+- [Boosting without Citi Bike](lab/results/figures/boost_without_citi_bike.png)
+- [Boosting with crash history and calendar features](lab/results/figures/boost_crash_history_only.png)
+- [13-week baseline](lab/results/figures/13_week_baseline.png)
+- [52-week baseline](lab/results/figures/52_week_baseline.png)
+
 ## Supporting files
 
 - [Training runner](lab/train.py) builds the features, fits models, selects a method on validation data, and evaluates it on the holdout. Add `--model Logistic` to run that model with both baselines.
 - [Feature preparation](lab/features.py) defines the spatial grid and aggregates August Citi Bike station endpoints. [311 preparation](lab/prepare_311.py) builds weekly street-complaint counts from NYC Open Data.
-- [Inputs](lab/inputs/) contains the NOAA observation snapshot and the weekly 311 aggregate used by the backtest. The [run instructions](#reproduce) identify the crash file, weather archive snapshot, and Citi Bike download.
-- [Results](lab/results/) contains the backtest metrics and the animated inspection replay. Download and open [the replay](lab/results/citywatch_lab.html) in a browser to compare budgets and models. [replay.html](lab/replay.html) is the template the runner uses to generate it.
+- [Inputs](lab/inputs/) contains the NOAA and 311 snapshots used by the backtest and the borough outlines used by the figures. The [run instructions](#reproduce) identify the crash file, weather archive snapshot, and Citi Bike download.
+- [Results](lab/results/) contains the backtest metrics, standalone figures, and the September 2025 daily CSV. [figures.py](lab/figures.py) renders the figures when the training runner finishes.
 - [Requirements](requirements.txt) lists the Python dependencies.
 
 ## Daily CSV export

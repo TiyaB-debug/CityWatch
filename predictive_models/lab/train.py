@@ -12,6 +12,7 @@ from threadpoolctl import threadpool_limits
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lab.features import (LAT_ORIGIN, LAT_STEP, LON_ORIGIN, LON_STEP, STATIONS,
                        bike_activity, grid)
+from lab.figures import write_figures
 from lab.models import baselines, extra_trees, gradient_boosting, logistic, poisson, random_forest
 
 WEEKS = pd.date_range("2023-01-02", "2026-10-26", freq="W-MON")
@@ -180,11 +181,8 @@ def score(rows, models, denominator, frames=False):
             for budget in BUDGETS:
                 captures[budget].append(int(top.head(budget).injury.sum()))
             if frames:
-                fields = ["cell_id", "latitude", "longitude", "injury", "injury_13", "requests_4",
-                          "bike_endpoints", "rain", model]
-                clean = top[fields].round(6).astype(object).where(pd.notna(top[fields]), None)
                 weeks.append({"date": week.strftime("%Y-%m-%d"), "total": actual,
-                              "cells": clean.values.tolist()})
+                              "cells": top[["latitude", "longitude", "injury"]].values.tolist()})
         summary[model] = {
             "average_precision": round(float(average_precision_score(rows.injury.gt(0), rows[model])), 6),
             "capture": {budget: {"count": sum(values), "share": sum(values) / total, "weekly": values}
@@ -248,10 +246,7 @@ def main():
     }
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "backtest.json").write_text(json.dumps(result, indent=2) + "\n")
-    template = Path(__file__).with_name("replay.html").read_text()
-    payload = json.dumps({"results": result, "replay": replay, "budgets": BUDGETS,
-                          "lat_step": LAT_STEP, "lon_step": LON_STEP}, allow_nan=False)
-    (args.out / "citywatch_lab.html").write_text(template.replace("/* DATA */ null", payload))
+    write_figures(args.out / "figures", result, replay)
     print(f"Validation selected {chosen}; test: {test[chosen]['capture'][10]['count']}/{test_total}", flush=True)
 
 
