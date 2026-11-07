@@ -6,16 +6,13 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, RandomForestClassifier
-from sklearn.linear_model import LogisticRegression, PoissonRegressor
 from sklearn.metrics import average_precision_score
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 from threadpoolctl import threadpool_limits
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from citywatch import (LAT_ORIGIN, LAT_STEP, LON_ORIGIN, LON_STEP, STATIONS,
                        bike_activity, grid)
+from lab.models import baselines, extra_trees, gradient_boosting, logistic, poisson, random_forest
 
 WEEKS = pd.date_range("2023-01-02", "2026-10-26", freq="W-MON")
 TRAIN_START = pd.Timestamp("2023-07-03")
@@ -135,31 +132,27 @@ def add_bike(rows, path):
     return rows, int(activity.sum())
 
 
-def tree_boost():
-    return HistGradientBoostingClassifier(max_iter=95, max_leaf_nodes=15, min_samples_leaf=70,
-                                          l2_regularization=1, early_stopping=False, random_state=42)
-
-
-def fit(rows):
+def model_specs():
     features = CRASH + WEATHER + COMPLAINT + BIKE
-    models = {
-        "Poisson": (make_pipeline(StandardScaler(), PoissonRegressor(alpha=.04)), features, True),
-        "Logistic": (make_pipeline(StandardScaler(), LogisticRegression(max_iter=350)), features, False),
-        "Random forest": (RandomForestClassifier(n_estimators=55, max_depth=13, min_samples_leaf=35,
-                                                  max_samples=.45, n_jobs=4, random_state=42), features, False),
-        "Extra trees": (ExtraTreesClassifier(n_estimators=55, max_depth=15, min_samples_leaf=35,
-                                              n_jobs=4, random_state=42), features, False),
-        "Gradient boost": (tree_boost(), features, False),
-        "Boost without weather": (tree_boost(), CRASH + COMPLAINT + BIKE, False),
-        "Boost without 311": (tree_boost(), CRASH + WEATHER + BIKE, False),
-        "Boost without Citi Bike": (tree_boost(), CRASH + WEATHER + COMPLAINT, False),
-        "Boost crash history only": (tree_boost(), CRASH, False),
+    specs = {
+        "Poisson": (poisson.build, features, True),
+        "Logistic": (logistic.build, features, False),
+        "Random forest": (random_forest.build, features, False),
+        "Extra trees": (extra_trees.build, features, False),
     }
+    specs.update({
+        name: (gradient_boosting.build, columns, False)
+        for name, columns in gradient_boosting.variants(CRASH, WEATHER, COMPLAINT, BIKE).items()
+    })
+    return specs
+
+
+def fit(rows, models):
     train = rows.loc[rows.week.between(TRAIN_START, VALIDATION, inclusive="left")]
     evaluated = rows.loc[rows.week.ge(VALIDATION)].copy()
-    evaluated["13-week baseline"] = evaluated.injury_13
-    evaluated["52-week baseline"] = evaluated.injury_52
-    for name, (model, columns, count) in models.items():
+    baselines.add_scores(evaluated)
+    for name, (build, columns, count) in models.items():
+        model = build()
         print(f"Fitting {name} on {len(train):,} cell-weeks", flush=True)
         median = train[columns].median().fillna(0)
         x = train[columns].fillna(median)
@@ -171,7 +164,7 @@ def fit(rows):
             else:
                 model.fit(x, train.injury.gt(0))
                 evaluated[name] = model.predict_proba(future)[:, 1]
-    return evaluated, ["13-week baseline", "52-week baseline", *models]
+    return evaluated, [*baselines.HISTORY_WINDOWS, *models]
 
 
 def score(rows, models, denominator, frames=False):
@@ -222,12 +215,17 @@ def main():
     parser.add_argument("--complaints", type=Path, required=True)
     parser.add_argument("--bike-zip", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    specs = model_specs()
+    parser.add_argument("--model", action="append", choices=specs,
+                        help="Run a named model alongside both baselines. Repeat to compare several.")
     args = parser.parse_args()
+    selected_specs = {name: spec for name, spec in specs.items()
+                      if args.model is None or name in args.model}
     rows, totals, crash_count = crash_panel(args.crashes)
     rows, stations = add_weather(rows, args.weather, args.archive)
     rows, requests = add_complaints(rows, args.complaints)
     rows, endpoints = add_bike(rows, args.bike_zip)
-    evaluated, models = fit(rows)
+    evaluated, models = fit(rows, selected_specs)
     validation, _, validation_total = score(evaluated.loc[evaluated.week.lt(TEST)], models, totals)
     chosen = max(models, key=lambda model: (validation[model]["capture"][10]["count"],
                                             validation[model]["average_precision"]))

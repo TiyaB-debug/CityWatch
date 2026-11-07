@@ -2,6 +2,17 @@
 
 The lab forecasts **weekly police-reported cyclist injury collisions** in approximately 500 m grid cells. It compares nine fitted variants and two historical ranking baselines. Open [the generated replay](results/citywatch_lab.html) in a browser to play the 17 holdout weeks, switch models, and compare inspection budgets of 5, 10, or 20 cells. The interactive map loads Leaflet and OpenStreetMap over the internet.
 
+## Model files
+
+- [Poisson regression](models/poisson.py) estimates the number of injury collisions per cell-week.
+- [Logistic regression](models/logistic.py) estimates the probability of at least one injury collision.
+- [Random forest](models/random_forest.py) combines trees trained on bootstrap samples.
+- [Extra trees](models/extra_trees.py) combines trees with randomized splits.
+- [Gradient boosting](models/gradient_boosting.py) contains the full model and four feature-removal variants.
+- [Historical baselines](models/baselines.py) rank cells by their 13-week and 52-week injury collision counts.
+
+The files define the estimators. [train.py](train.py) prepares the inputs and runs the same validation and holdout comparison for each model.
+
 ## Results
 
 The spring validation set selected **gradient boosting without 311** by capture at 10 cells. In the July 6–November 1, 2026 holdout, that model captured **50 of 2,010 collisions (2.49%)**. The 13-week count baseline captured **45 (2.24%)** and the 52-week baseline captured **58 (2.89%)**. The paired three-week block bootstrap interval for the selected model's gain over the 13-week baseline was **−0.61 to +1.16 percentage points**. At this budget the selected model did not beat the stronger historical baseline.
@@ -36,3 +47,5 @@ python3 predictive_models/lab/train.py \
 ```
 
 The 311 aggregate can be recreated with `python3 predictive_models/lab/prepare_311.py --out predictive_models/lab/inputs/311_weekly.csv.gz`. Its snapshot may change when the upstream dataset is revised. Raw Citi Bike trips and individual 311 requests are excluded from the repository.
+
+To run just one fitted model and both baselines, add `--model Logistic` to the training command and use a separate output folder such as `--out /tmp/citywatch-logistic`. Repeat `--model` to compare specific models. Run `python3 predictive_models/lab/train.py --help` for the list of names.
