@@ -25,6 +25,12 @@ Weather did not improve capture in this one-month test. For this pilot, the Augu
 - [Manhattan presentation figures](predictive_models/presentation/results/) show collision hotspots, weather and complaint relationships, clustering, and a monthly time series. This separate exploratory analysis uses a broader historical snapshot.
 - [Manhattan inspection forecasts](predictive_models/forecast/results/) contains individual model figures, backtest metrics, and daily forecast outputs.
 
+## Team demo and inspection assignments
+
+- [Crash risk map](web/index.html), [agency briefing](web/agency.html), and [commuter concept](web/commuter.html) are prebuilt HTML demos. Download and open the desired page locally. The commuter view is a prototype for exploring reported crash patterns.
+- [Team pipeline](pipeline/build.py) builds the team demo from organizer CSVs in a local `data/` folder. Its docstring lists the four input filenames. Install the [team pipeline requirements](requirements.txt) and run `python3 pipeline/build.py` from the repository root. This pipeline uses a 1 km grid and reports its own [evaluation](results/eval.json), separate from the 500 m comparison above.
+- [Inspection allocator](optimization/allocator.py) takes daily area scores and assigns inspection visits to teams. See the [sample assignments](assignments.csv) and [assignment map](inspection_map.html). The [example runner](run_optimizer.py) references an archived prediction path and needs an input CSV path update before rerunning.
+
 ## Reproduce the Datathon test
 
 From the root of a full clone:
