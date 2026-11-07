@@ -1,8 +1,5 @@
-"""Render a standalone hotspot and holdout figure for each ranking method."""
+"""Draw separate September shortlist and capture figures."""
 import json
-import re
-from datetime import date
-from itertools import accumulate
 from pathlib import Path
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -10,85 +7,64 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon
 
-from lab.features import LAT_STEP, LON_STEP
-
-INK = "#173743"
-MUTED = "#45606b"
+OUTLINES = Path(__file__).with_name("inputs") / "nyc_borough_outlines.json"
 TEAL = "#087e84"
 ORANGE = "#b84719"
+MUTED = "#45606b"
+INK = "#173743"
 PAPER = "#f3f7f8"
-OUTLINES = Path(__file__).with_name("inputs") / "nyc_borough_outlines.json"
 
 
-def draw_maps(figure, grid, frames, baseline_frames, outlines):
-    for column, index in enumerate((0, len(frames) // 2, len(frames) - 1)):
-        frame = frames[index]
-        ax = figure.add_subplot(grid[0, column], facecolor=PAPER)
-        for outline in outlines:
-            ax.add_patch(Polygon(outline, closed=True, facecolor="#dce8eb",
-                                 edgecolor="#9cb3bb", linewidth=.45))
-        picks = frame["cells"][:10]
-        chosen = {tuple(cell[:2]) for cell in picks}
-        baseline = {tuple(cell[:2]) for cell in baseline_frames[index]["cells"][:10]}
-        for lat, lon in sorted(chosen | baseline):
-            bounds = [[lon-LON_STEP/2, lat-LAT_STEP/2], [lon+LON_STEP/2, lat-LAT_STEP/2],
-                      [lon+LON_STEP/2, lat+LAT_STEP/2], [lon-LON_STEP/2, lat+LAT_STEP/2]]
-            point = (lat, lon)
-            color = TEAL if point in chosen - baseline else ORANGE if point in baseline - chosen else MUTED
-            ax.add_patch(Polygon(bounds, closed=True, facecolor=color,
-                                 edgecolor=color, linewidth=.65, zorder=3))
-        ax.set(xlim=(-74.27, -73.68), ylim=(40.48, 40.93), aspect=1/.76)
-        ax.set_axis_off()
-        week = date.fromisoformat(frame["date"])
-        captured = int(sum(cell[2] for cell in picks))
-        ax.set_title(f"{week:%b %d}  ·  {len(chosen - baseline)} swaps  ·  {captured} captured",
-                     color=INK, fontsize=11, loc="left", pad=7)
-
-
-def draw_capture(ax, frames, metrics, baseline):
-    weeks = [date.fromisoformat(frame["date"]) for frame in frames]
-    for budget, color in ((5, "#6c57a5"), (10, TEAL), (20, "#1c4d83")):
-        weekly = metrics["capture"][budget]["weekly"]
-        reference = baseline["capture"][budget]["weekly"]
-        deltas = [current - prior for current, prior in zip(weekly, reference)]
-        ax.plot(weeks, list(accumulate(deltas)), color=color, linewidth=2,
-                label=f"{budget} cells per week")
-    ax.axhline(0, color=MUTED, linestyle="--", linewidth=1)
-    ax.set_title("Cumulative capture change vs. the 52-week baseline", loc="left", color=INK,
-                 fontsize=12, fontweight="bold")
-    ax.set(xlabel="Holdout week starting (2026)", ylabel="Change in collisions captured")
-    ticks = weeks[::4]
-    ax.set_xticks(ticks, [week.strftime("%b %d") for week in ticks])
-    ax.grid(axis="y", color="#d9e4e7")
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.tick_params(colors=MUTED, labelsize=9)
-    ax.legend(loc="lower right", bbox_to_anchor=(1, 1.01), frameon=False, fontsize=9, ncols=3)
-
-
-def write_figures(directory, result, frames_by_model):
+def write_figures(directory, cells, rankings, observed, metrics, methods):
     directory.mkdir(parents=True, exist_ok=True)
     outlines = json.loads(OUTLINES.read_text())
-    baseline = result["test"]["52-week baseline"]
-    for model, frames in frames_by_model.items():
-        metrics = result["test"][model]
-        figure = Figure(figsize=(11, 8), facecolor=PAPER)
+    locations = cells.set_index("cell_id")
+    baseline = set(rankings["baseline"])
+    for model, label in methods.items():
+        figure = Figure(figsize=(11, 6), facecolor=PAPER)
         FigureCanvasAgg(figure)
-        grid = figure.add_gridspec(2, 3, height_ratios=(1, 1.05), hspace=.47,
-                                  left=.09, right=.96, top=.79, bottom=.12)
-        figure.text(.09, .947, "CITYWATCH  /  WEEKLY INSPECTION BACKTEST", color=TEAL,
+        map_ax, chart = figure.subplots(1, 2, gridspec_kw={"width_ratios": [1.1, 1]})
+        figure.subplots_adjust(left=.07, right=.96, top=.76, bottom=.19, wspace=.3)
+        figure.text(.07, .94, "CITYWATCH  /  AUGUST TRAINING · SEPTEMBER HOLDOUT", color=TEAL,
                     fontsize=10, fontweight="bold")
-        figure.text(.09, .894, model, color=INK, fontsize=25, fontweight="bold")
-        captured = metrics["capture"][10]["count"]
-        figure.text(.09, .851, f"{captured} of {result['test_total']:,} reported injury collisions captured"
-                    "  ·  10 inspections per week  ·  Jul 6–Nov 1, 2026", color=MUTED, fontsize=11)
-        draw_maps(figure, grid, frames, frames_by_model["52-week baseline"], outlines)
-        figure.legend(handles=[
-            Line2D([], [], marker="s", linestyle="", color=TEAL, label="Added by this model"),
-            Line2D([], [], marker="s", linestyle="", color=ORANGE, label="52-week baseline only"),
+        figure.text(.07, .864, label, color=INK, fontsize=23, fontweight="bold")
+        for outline in outlines:
+            map_ax.add_patch(Polygon(outline, closed=True, facecolor="#dce8eb",
+                                    edgecolor="#9cb3bb", linewidth=.45))
+        chosen = set(rankings[model])
+        for cell in sorted(chosen | baseline):
+            point = locations.loc[cell]
+            color = TEAL if cell in chosen - baseline else ORANGE if cell in baseline - chosen else MUTED
+            hit = observed.get(cell, 0) > 0
+            map_ax.scatter(point.longitude, point.latitude, s=28, marker="s", edgecolor=color,
+                           facecolor=color if hit else "none", linewidth=1.15, zorder=3)
+        map_ax.set(xlim=(-74.27, -73.68), ylim=(40.48, 40.93), aspect=1/.76)
+        map_ax.set_axis_off()
+        map_ax.set_title(f"Top 10 inspection cells · {len(chosen - baseline)} swaps",
+                         loc="left", fontsize=11, color=INK)
+        map_ax.legend(handles=[
+            Line2D([], [], marker="s", linestyle="", color=TEAL, label="Added by method"),
+            Line2D([], [], marker="s", linestyle="", color=ORANGE, label="August baseline only"),
             Line2D([], [], marker="s", linestyle="", color=MUTED, label="Picked by both"),
-        ], loc="upper left", bbox_to_anchor=(.083, .50), ncols=3, frameon=False, fontsize=9)
-        draw_capture(figure.add_subplot(grid[1, :], facecolor=PAPER), frames, metrics, baseline)
-        figure.text(.09, .039, "Source: CityWatch holdout · NYC Open Data crashes. "
-                    "Borough outlines: NYC Department of City Planning.", color=MUTED, fontsize=8)
-        filename = re.sub(r"[^a-z0-9]+", "_", model.lower()).strip("_") + ".png"
-        figure.savefig(directory / filename, dpi=150)
+        ], loc="upper center", bbox_to_anchor=(.5, -.025), frameon=False, fontsize=8, ncols=3)
+
+        counts = metrics["monthly_top_k"]
+        total = metrics["september_reported_injury_collisions"]
+        for index, budget in enumerate((5, 10)):
+            baseline_share = 100 * counts["baseline"][budget]["share"]
+            share = 100 * counts[model][budget]["share"]
+            chart.barh(index+.16, baseline_share, height=.27, color=MUTED, label="August baseline" if not index else None)
+            chart.barh(index-.16, share, height=.27, color=TEAL, label=label if not index else None)
+            for value, position, key in ((baseline_share, index+.16, "baseline"), (share, index-.16, model)):
+                chart.text(value+.016, position, f"{counts[key][budget]['captured']}/{total}",
+                           va="center", fontsize=9, color=INK)
+        maximum = max(100 * result[budget]["share"] for result in counts.values() for budget in (5,10))
+        chart.set(xlim=(0, maximum * 1.36), xlabel="Share of September injury collisions (%)")
+        chart.set_yticks([0, 1], ["5 locations", "10 locations"])
+        chart.set_title("September collisions captured", loc="left", fontsize=11, color=INK)
+        chart.spines[["top", "right"]].set_visible(False)
+        chart.legend(loc="upper center", bbox_to_anchor=(.5, -.23), frameon=False, fontsize=8, ncols=2)
+        figure.text(.07, .045, "Filled squares mark cells with a reported September injury collision. "
+                    "Sources: NYC Open Data crashes and borough boundaries, NOAA daily summaries.",
+                    color=MUTED, fontsize=8)
+        figure.savefig(directory / f"{model}.png", dpi=150)
