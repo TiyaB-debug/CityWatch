@@ -1,0 +1,68 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CityWatch Inspection Assignments</title>
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; }
+    header { padding: 16px; }
+    h2 { margin: 0 0 8px; }
+    #map { height: 80vh; }
+  </style>
+</head>
+<body>
+  <header>
+    <h2>CityWatch Inspection Assignments</h2>
+    <div>
+      Team 1 — blue · Team 2 — orange · Team 3 — purple.
+      Click a marker for details.
+    </div>
+    <p>Lines connect visits directly. They are straight-line estimates.</p>
+  </header>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const assignments = [{"team_id": "1", "visit_order": "1", "cell_id": "60-49", "latitude": "40.75225", "longitude": "-73.97795", "priority_score": "0.09294469"}, {"team_id": "1", "visit_order": "2", "cell_id": "62-48", "latitude": "40.76125", "longitude": "-73.98385", "priority_score": "0.09284932"}, {"team_id": "1", "visit_order": "3", "cell_id": "63-49", "latitude": "40.76575", "longitude": "-73.97795", "priority_score": "0.06745266"}, {"team_id": "1", "visit_order": "4", "cell_id": "64-47", "latitude": "40.77025", "longitude": "-73.98975", "priority_score": "0.0675143"}, {"team_id": "2", "visit_order": "1", "cell_id": "50-54", "latitude": "40.70725", "longitude": "-73.94845", "priority_score": "0.09229353"}, {"team_id": "2", "visit_order": "2", "cell_id": "56-48", "latitude": "40.73425", "longitude": "-73.98385", "priority_score": "0.06733761"}, {"team_id": "2", "visit_order": "3", "cell_id": "61-48", "latitude": "40.75675", "longitude": "-73.98385", "priority_score": "0.06742725"}, {"team_id": "2", "visit_order": "4", "cell_id": "62-51", "latitude": "40.76125", "longitude": "-73.96615", "priority_score": "0.06728784"}, {"team_id": "3", "visit_order": "1", "cell_id": "56-45", "latitude": "40.73425", "longitude": "-74.00155", "priority_score": "0.0675593"}, {"team_id": "3", "visit_order": "2", "cell_id": "58-46", "latitude": "40.74325", "longitude": "-73.99565", "priority_score": "0.06753067"}, {"team_id": "3", "visit_order": "3", "cell_id": "54-47", "latitude": "40.72525", "longitude": "-73.98975", "priority_score": "0.06752542"}, {"team_id": "3", "visit_order": "4", "cell_id": "51-44", "latitude": "40.71175", "longitude": "-74.00745", "priority_score": "0.06745773"}];
+    const map = L.map("map").setView([40.75, -73.98], 12);
+
+    L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { attribution: "© OpenStreetMap contributors" }
+    ).addTo(map);
+
+    const colors = ["#2563eb", "#ea580c", "#9333ea", "#15803d"];
+    const teams = {};
+    const bounds = [];
+
+    for (const row of assignments) {
+      const point = [Number(row.latitude), Number(row.longitude)];
+      const color = colors[(Number(row.team_id) - 1) % colors.length];
+      bounds.push(point);
+      (teams[row.team_id] ??= []).push(row);
+
+      const details = document.createElement("div");
+      details.textContent =
+        `Team ${row.team_id} · Visit ${row.visit_order} · ` +
+        `Area ${row.cell_id} · Score ${Number(row.priority_score).toFixed(4)}`;
+
+      L.circleMarker(point, {
+        radius: 9, color, fillOpacity: 0.85
+      }).addTo(map)
+        .bindTooltip(`Team ${row.team_id} · Visit ${row.visit_order}`)
+        .bindPopup(details);
+    }
+
+    for (const [team, rows] of Object.entries(teams)) {
+      rows.sort((a, b) => Number(a.visit_order) - Number(b.visit_order));
+      L.polyline(
+        rows.map(row => [Number(row.latitude), Number(row.longitude)]),
+        { color: colors[(Number(team) - 1) % colors.length] }
+      ).addTo(map);
+    }
+
+    if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
+  </script>
+</body>
+</html>

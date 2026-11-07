@@ -1,0 +1,637 @@
+<meta charset="utf-8">
+<title>NYC Crash Risk Forecast</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: map fills the left, a briefing column docks right (stacks under the map on phones).
+   Type: Public Sans, the U.S. government's own typeface, for a civic operations tool; Plex Mono for figures. */
+:root {
+  --bg: #eef1f4; --land: #dfe4ea; --panel: #ffffff; --line: #d5dbe2; --fg: #16202b; --muted: #5d6b7a;
+  --accent: #1f5fae; --chip: #f2f5f8;
+  --r0: #c9d2dc; --r1: #f3c969; --r2: #ee9442; --r3: #d9472b; --r4: #9b1239;
+  --crash: #16202b;
+  --f-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e141b; --land: #1a2430; --panel: #131b24; --line: #2a3643; --fg: #e6ecf2; --muted: #93a2b2;
+  --accent: #6ea8ff; --chip: #1a2430; --r0: #2c3946; --r1: #e8c15e; --r2: #f0913f; --r3: #f0563a; --r4: #ff4f86; --crash: #ffffff; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0e141b; --land: #1a2430; --panel: #131b24; --line: #2a3643; --fg: #e6ecf2; --muted: #93a2b2;
+  --accent: #6ea8ff; --chip: #1a2430; --r0: #2c3946; --r1: #e8c15e; --r2: #f0913f; --r3: #f0563a; --r4: #ff4f86; --crash: #ffffff; color-scheme: dark; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.45; }
+.app { display: grid; grid-template-columns: 1fr 420px; height: 100%; }
+.mapwrap { position: relative; min-width: 0; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+.panel { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; min-width: 0;
+  padding-right: max(0px, env(safe-area-inset-right, 0px)); }
+.panel > section { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+.lede { color: var(--muted); margin: 0; font-size: 13px; }
+h2 { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin: 0; }
+h3 { font-size: 16px; margin: 0; font-weight: 700; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+label.f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
+select { width: 100%; background: var(--chip); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; font: 500 13.5px var(--f-body); }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { flex: 1; background: transparent; border: 0; color: var(--muted); padding: 8px 6px; font: 600 13px var(--f-body); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.chip { background: var(--chip); border: 1px solid var(--line); color: var(--fg); border-radius: 999px; padding: 5px 11px; font: 500 12.5px var(--f-body); cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--panel); border-color: var(--fg); }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn { background: transparent; border: 1px solid var(--accent); color: var(--accent); border-radius: 6px; padding: 6px 10px; font: 600 12.5px var(--f-body); cursor: pointer; }
+
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line); padding: 0 12px; position: sticky; top: 0; background: var(--panel); z-index: 2; }
+.tabs button { background: none; border: 0; border-bottom: 3px solid transparent; padding: 12px 10px 9px; font: 600 14px var(--f-body); color: var(--muted); cursor: pointer; }
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+
+.headline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.big { font: 600 34px/1 var(--f-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.delta { font: 600 13px var(--f-mono); padding: 2px 6px; border-radius: 4px; background: var(--chip); }
+.note { font-size: 12.5px; color: var(--muted); margin: 0; }
+.wx { font: 12.5px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.list { display: flex; flex-direction: column; margin: 0 -8px; }
+.item { display: grid; grid-template-columns: 26px 1fr auto; gap: 2px 10px; text-align: left; width: 100%; background: transparent; border: 0;
+  color: var(--fg); padding: 9px 8px; border-radius: 7px; cursor: pointer; font: 13.5px var(--f-body); align-items: start; }
+.item:hover, .item.on { background: var(--chip); }
+.rank { font: 600 12px var(--f-mono); width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; margin-top: 1px; }
+.item .nm { font-weight: 600; min-width: 0; }
+.item .nm small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+.item .val { font: 600 13px var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.item .val small { display: block; font: 400 11px var(--f-body); color: var(--muted); }
+.acts { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tag { font-size: 11.5px; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); }
+.tag b { font-weight: 700; margin-right: 4px; }
+.tag.nypd b { color: #2f6fd1; } .tag.dot b { color: #c76a00; } .tag.ems b { color: #c2264b; }
+
+.detail { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kv div { display: flex; flex-direction: column; min-width: 0; }
+.kv b { font: 600 17px var(--f-mono); font-variant-numeric: tabular-nums; }
+.kv span { font-size: 11.5px; color: var(--muted); }
+.actions { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.actions li { display: grid; grid-template-columns: 52px 1fr; gap: 8px; font-size: 13px; }
+.owner { font: 700 11px var(--f-body); letter-spacing: 0.05em; padding: 2px 0; text-align: center; border-radius: 4px; color: #fff; height: fit-content; }
+.owner.nypd { background: #2f6fd1; } .owner.dot { background: #c76a00; } .owner.ems { background: #c2264b; }
+
+.push { border-radius: 14px; padding: 12px 14px; background: var(--chip); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.push .app-name { font-size: 11.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.push p { margin: 0; font-size: 13.5px; }
+
+.legend { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); bottom: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 5px; }
+.legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: -2px; }
+.legend .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--crash); margin: 0 8px 0 3px; vertical-align: 0; }
+.hint { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); background: var(--fg); color: var(--panel); padding: 6px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; }
+.zoom { position: absolute; right: 12px; top: calc(12px + env(safe-area-inset-top, 0px)); display: flex; flex-direction: column; gap: 4px; }
+.zoom button { width: 34px; height: 34px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: 600 18px var(--f-body); cursor: pointer; }
+.method p { margin: 0; font-size: 13px; }
+.method table { border-collapse: collapse; font-size: 12.5px; width: 100%; }
+.method td, .method th { border-bottom: 1px solid var(--line); padding: 5px 4px; text-align: left; font-variant-numeric: tabular-nums; }
+.method th { color: var(--muted); font-weight: 600; }
+.method td.n { font-family: var(--f-mono); text-align: right; }
+.tblwrap { overflow-x: auto; }
+
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 58vh auto; height: auto; }
+  html, body { height: auto; }
+  .mapwrap { height: 58vh; }
+  .panel { border-left: 0; border-top: 1px solid var(--line); overflow: visible;
+    padding-left: max(0px, env(safe-area-inset-left, 0px)); }
+  .panel > section { padding-left: 16px; padding-right: 16px; }
+  .legend { flex-direction: row; flex-wrap: wrap; gap: 2px 10px; padding: 5px 8px; font-size: 11px; right: 56px; }
+  .legend b { width: 100%; }
+}
+</style>
+
+<div class="app">
+  <div class="mapwrap">
+    <canvas id="map" aria-label="Map of NYC crash risk"></canvas>
+    <div class="zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button></div>
+    <div class="hint" id="hint" hidden></div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <aside class="panel">
+    <section>
+      <div>
+        <h1>NYC Crash Risk Forecast</h1>
+        <p class="lede">Where injury crashes are most likely, given the day, the hour and the weather forecast. Built on NYPD collisions, NOAA weather and 311 DOT requests, Aug–Sep 2025.</p>
+      </div>
+      <div class="seg" role="group" aria-label="Scenario source">
+        <button id="src-fc" aria-pressed="true">Forecast</button>
+        <button id="src-rp" aria-pressed="false">Replay a 2025 day</button>
+      </div>
+      <div id="fcControls" class="row" style="flex-direction:column;align-items:stretch;gap:10px">
+        <div class="grid3">
+          <label class="f">Day<select id="dow"></select></label>
+          <label class="f">Rain · Manhattan/Bronx<select id="rain0"></select></label>
+          <label class="f">Rain · north Queens<select id="rain1"></select></label>
+          <label class="f">Rain · south Queens/Bklyn<select id="rain2"></select></label>
+          <label class="f">Heat<select id="hot"><option value="0">Normal</option><option value="1">Hot (30 °C+)</option></select></label>
+          <label class="f">&nbsp;<button class="btn" id="simulate">Simulate a forecast</button></label>
+        </div>
+      </div>
+      <div id="rpControls" hidden>
+        <label class="f">Day to replay<select id="rpDay"></select></label>
+      </div>
+      <div class="wx" id="wxLine"></div>
+      <div class="row" role="group" aria-label="Time of day" id="windows"></div>
+    </section>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" id="tab-brief" aria-selected="true">Agency briefing</button>
+      <button role="tab" id="tab-comm" aria-selected="false">Commuter app</button>
+      <button role="tab" id="tab-method" aria-selected="false">Method</button>
+    </nav>
+
+    <section id="pane-brief">
+      <div>
+        <h2 id="sumTitle">Expected injury crashes citywide</h2>
+        <div class="headline"><span class="big" id="sumBig">0</span><span class="delta" id="sumDelta"></span></div>
+        <p class="note" id="sumNote"></p>
+      </div>
+      <div id="detail"></div>
+      <h2>Top 10 areas to act on</h2>
+      <div class="list" id="top"></div>
+    </section>
+
+    <section id="pane-comm" hidden>
+      <div class="seg" role="group" aria-label="How you travel">
+        <button id="mode-drive" aria-pressed="true">I drive or walk</button>
+        <button id="mode-bike" aria-pressed="false">I bike</button>
+      </div>
+      <p class="note" id="commHint">Tap your start and then your destination on the map.</p>
+      <div id="commOut"></div>
+    </section>
+
+    <section id="pane-method" class="method" hidden></section>
+  </aside>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+(() => {
+"use strict";
+if (!DATA) {
+  // this is the source template: build.py inserts the data and writes the real pages
+  document.body.innerHTML = '<div style="max-width:560px;margin:15vh auto;padding:0 16px;font:15px/1.55 system-ui,sans-serif">' +
+    '<h1 style="font-size:20px">This is a template, not the map</h1>' +
+    '<p>Template files have no data in them. Open <b>satellite.html</b>, <b>agency.html</b>, <b>commuter.html</b> or <b>index.html</b> instead, ' +
+    'or run <code>python pipeline/build.py</code> to regenerate them.</p></div>';
+  return;
+}
+const M = DATA.meta, CE = DATA.cells, CR = DATA.crashes, NC = CE.lat.length, EV = M.eval;
+const $ = id => document.getElementById(id);
+const DOW = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const WINDOWS = [["all", "All day"], ["am", "6–10 AM"], ["mid", "10 AM–3 PM"], ["pm", "3–8 PM"], ["night", "8 PM–6 AM"]];
+const WIN_HOURS = { all: [0, 24], am: [6, 10], mid: [10, 15], pm: [15, 20], night: [20, 30] };
+const RAIN = ["Dry", "Light rain (1–10 mm)", "Heavy rain (10 mm+)"];
+const BORO = { MANHATTAN: "Manhattan", BROOKLYN: "Brooklyn", QUEENS: "Queens", BRONX: "Bronx", "STATEN ISLAND": "Staten Island" };
+const fmt1 = v => v.toFixed(1), fmtN = n => Math.round(n).toLocaleString("en-US");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const st = { src: "fc", dow: 4, rain: [0, 0, 0], hot: 0, rpDay: 0, win: "pm", tab: "brief", sel: null, mode: "drive", route: [] };
+
+// ---------- model ----------
+const city = M.city;
+function lamForecast(rain, hot, dow) {
+  const out = new Float64Array(NC);
+  for (let c = 0; c < NC; c++) {
+    const r = rain[CE.sta[c]];
+    let l = CE.base[c] * city.dow[dow];
+    if (r === 2) l *= city.heavy * CE.u_heavy[c]; else if (r === 1) l *= city.light * CE.u_light[c];
+    if (hot) l *= city.hot * CE.u_hot[c];
+    out[c] = l;
+  }
+  return out;
+}
+const chance = l => { const p = (1 - Math.exp(-l)) * 100; return (p < 1 ? "<1" : Math.round(p)) + "%"; };
+const cellName = c => CE.name[c] ? "Near " + CE.name[c] : "Area at " + CE.lat[c].toFixed(3) + ", " + CE.lng[c].toFixed(3);
+const cellBoro = c => BORO[CE.boro[c]] || "";
+const cityNightShare = (() => { let n = 0, a = 0; for (let c = 0; c < NC; c++) { n += CE.night[c]; a += CE.n_all[c]; } return n / a; })();
+
+let lam = null, lamNormal = null, order = [], pct = null;
+function compute() {
+  const w = CE.win[st.win];
+  let raw, normal;
+  if (st.src === "fc") { raw = lamForecast(st.rain, st.hot, st.dow); normal = lamForecast([0, 0, 0], 0, st.dow); }
+  else { raw = Float64Array.from(DATA.loo[st.rpDay]); const d = st.rpDay; normal = lamForecast([0, 0, 0], 0, M.dow[d]); }
+  lam = new Float64Array(NC); lamNormal = new Float64Array(NC);
+  for (let c = 0; c < NC; c++) { lam[c] = raw[c] * w[c]; lamNormal[c] = normal[c] * w[c]; }
+  order = [...Array(NC).keys()].sort((a, b) => lam[b] - lam[a]);
+  pct = new Float64Array(NC); order.forEach((c, i) => pct[c] = i / NC);
+}
+const riskClass = c => pct[c] < 0.01 ? 4 : pct[c] < 0.05 ? 3 : pct[c] < 0.10 ? 2 : pct[c] < 0.25 ? 1 : 0;
+
+function peakWindow(c) {
+  let best = null, bv = -1;
+  for (const [k, lab] of WINDOWS) { if (k === "all") continue; const hrs = WIN_HOURS[k][1] - WIN_HOURS[k][0]; const v = CE.win[k][c] / hrs; if (v > bv) { bv = v; best = lab; } }
+  return best;
+}
+
+const q80 = k => { const v = CE.i311.map(r => r[k]).sort((a, b) => a - b); return Math.max(3, v[Math.floor(v.length * 0.8)]); };
+const TH = { road: q80(0), light: q80(1), signal: q80(2) };
+const cityCycShare = (() => { let a = 0, b = 0; for (let c = 0; c < NC; c++) { a += CE.n_cyc[c]; b += CE.n_inj[c]; } return a / b; })();
+function actionsFor(c, rank) {
+  const a = [], s = CE.i311[c];
+  const cycShare = CE.n_inj[c] ? CE.n_cyc[c] / CE.n_inj[c] : 0;
+  const nightShare = CE.n_all[c] ? CE.night[c] / CE.n_all[c] : 0;
+  const winLabel = WINDOWS.find(w => w[0] === st.win)[1];
+  a.push(["nypd", `Visible traffic enforcement ${st.win === "all" ? "at the local peak, " + peakWindow(c) : winLabel}`]);
+  if (rank < 5) a.push(["ems", "Pre-stage an ambulance or tow unit nearby for this window"]);
+  if (cycShare >= 1.5 * cityCycShare && CE.n_inj[c] >= 10) a.push(["dot", `Review bike-lane protection: a cyclist was hurt in ${Math.round(cycShare * 100)}% of injury crashes here`]);
+  if (s[2] >= TH.signal) a.push(["dot", `Inspect traffic signals: ${s[2]} signal complaints in Aug–Sep`]);
+  if (s[1] >= TH.light && nightShare > cityNightShare + 0.03) a.push(["dot", `Repair street lights: ${s[1]} outages reported, ${Math.round(nightShare * 100)}% of crashes here happen at night`]);
+  if (s[0] >= TH.road) a.push(["dot", `Pavement repair: ${s[0]} street-condition complaints${s[4] ? `, ${s[4]} requests still open` : ""}`]);
+  return a;
+}
+
+// ---------- controls ----------
+function fillSelects() {
+  $("dow").innerHTML = DOW.map((d, i) => `<option value="${i}">${d}</option>`).join("");
+  for (let s = 0; s < 3; s++) $("rain" + s).innerHTML = RAIN.map((r, i) => `<option value="${i}">${r.replace(/ \(.*\)/, "")}</option>`).join("");
+  $("rpDay").innerHTML = M.dates.map((d, i) => {
+    const p = M.prcp[i], maxp = Math.max(...p), dt = new Date(d + "T12:00:00");
+    const tag = maxp >= 10 ? " · heavy rain" : maxp >= 1 ? " · rain" : (Math.max(...M.tmax[i]) >= 30 ? " · hot" : "");
+    return `<option value="${i}">${dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}${tag}</option>`;
+  }).join("");
+  $("windows").innerHTML = WINDOWS.map(([k, l]) => `<button class="chip" data-w="${k}" aria-pressed="${k === st.win}">${l}</button>`).join("");
+  $("windows").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { st.win = b.dataset.w; syncChips(); update(); }));
+  syncForm();
+}
+function syncChips() { $("windows").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.w === st.win))); }
+function syncForm() {
+  $("dow").value = st.dow; for (let s = 0; s < 3; s++) $("rain" + s).value = st.rain[s]; $("hot").value = st.hot; $("rpDay").value = st.rpDay;
+}
+["dow", "hot"].forEach(id => $(id).addEventListener("change", e => { st[id] = +e.target.value; update(); }));
+[0, 1, 2].forEach(s => $("rain" + s).addEventListener("change", e => { st.rain[s] = +e.target.value; update(); }));
+$("rpDay").addEventListener("change", e => { st.rpDay = +e.target.value; update(); });
+$("simulate").addEventListener("click", () => {
+  // draw a plausible forecast from the 2025 record: one real day's weather at all three stations together
+  const d = Math.floor(Math.random() * M.dates.length);
+  st.rain = M.prcp[d].map(p => p >= 10 ? 2 : p >= 1 ? 1 : 0); st.hot = Math.max(...M.tmax[d]) >= 30 ? 1 : 0;
+  st.dow = Math.floor(Math.random() * 7); syncForm(); update();
+});
+function setSrc(s) {
+  st.src = s; $("src-fc").setAttribute("aria-pressed", String(s === "fc")); $("src-rp").setAttribute("aria-pressed", String(s === "rp"));
+  $("fcControls").hidden = s !== "fc"; $("rpControls").hidden = s !== "rp"; update();
+}
+$("src-fc").addEventListener("click", () => setSrc("fc"));
+$("src-rp").addEventListener("click", () => {
+  // start the replay on the wettest day, the case people ask about first
+  if (st.src !== "rp") { let best = 0; M.prcp.forEach((p, i) => { if (Math.max(...p) > Math.max(...M.prcp[best])) best = i; }); st.rpDay = best; syncForm(); }
+  setSrc("rp");
+});
+function setTab(t) {
+  st.tab = t;
+  ["brief", "comm", "method"].forEach(k => { $("tab-" + k).setAttribute("aria-selected", String(k === t)); $("pane-" + k).hidden = k !== t; });
+  $("hint").hidden = t !== "comm"; if (t === "comm") $("hint").textContent = st.route.length === 1 ? "Now tap your destination" : "Tap your start point";
+  render();
+}
+["brief", "comm", "method"].forEach(k => $("tab-" + k).addEventListener("click", () => setTab(k)));
+$("mode-drive").addEventListener("click", () => { st.mode = "drive"; $("mode-drive").setAttribute("aria-pressed", "true"); $("mode-bike").setAttribute("aria-pressed", "false"); renderComm(); render(); });
+$("mode-bike").addEventListener("click", () => { st.mode = "bike"; $("mode-bike").setAttribute("aria-pressed", "true"); $("mode-drive").setAttribute("aria-pressed", "false"); renderComm(); render(); });
+
+// ---------- panels ----------
+function wxText() {
+  if (st.src === "fc") {
+    return `Forecast: ${DOW[st.dow]} · ` + M.stations.map((s, i) => `${s.name} ${RAIN[st.rain[i]].replace(/ \(.*\)/, "").toLowerCase()}`).join(" · ") + (st.hot ? " · hot" : "");
+  }
+  const d = st.rpDay;
+  return `${DOW[M.dow[d]]} ${M.dates[d]} · ` + M.stations.map((s, i) => `${s.name} ${M.prcp[d][i]} mm, ${M.tmax[d][i]} °C`).join(" · ");
+}
+
+let actualByCell = null, actualTotal = 0;
+function updateActual() {
+  actualByCell = null; actualTotal = 0;
+  if (st.src !== "rp") return;
+  actualByCell = new Int32Array(NC);
+  const [h0, h1] = WIN_HOURS[st.win];
+  for (let i = 0; i < CR.day.length; i++) {
+    if (CR.day[i] !== st.rpDay || !CR.inj[i]) continue;
+    const h = CR.hour[i]; const inWin = st.win === "night" ? (h >= 20 || h < 6) : (h >= h0 && h < h1);
+    if (!inWin) continue;
+    actualByCell[CR.cell[i]]++; actualTotal++;
+  }
+}
+
+function renderBrief() {
+  let tot = 0, totN = 0; for (let c = 0; c < NC; c++) { tot += lam[c]; totN += lamNormal[c]; }
+  const winLabel = WINDOWS.find(w => w[0] === st.win)[1].toLowerCase();
+  $("sumTitle").textContent = `Expected injury crashes citywide · ${winLabel}`;
+  $("sumBig").textContent = fmt1(tot);
+  const dp = (tot / totN - 1) * 100;
+  $("sumDelta").textContent = Math.abs(dp) < 0.5 ? "same as a dry day" : `${dp > 0 ? "+" : "−"}${Math.abs(dp).toFixed(0)}% vs a dry day`;
+  let top10 = 0; for (let i = 0; i < 10; i++) top10 += lam[order[i]];
+  const effs = EV.citywide_weather_effects.injury_crashes, active = [];
+  const rainNow = st.src === "fc" ? st.rain : M.prcp[st.rpDay].map(p => p >= 10 ? 2 : p >= 1 ? 1 : 0);
+  const hotNow = st.src === "fc" ? st.hot : (Math.max(...M.tmax[st.rpDay]) >= 30 ? 1 : 0);
+  if (rainNow.includes(2)) active.push(effs.heavy); if (rainNow.includes(1)) active.push(effs.light); if (hotNow) active.push(effs.hot);
+  const noisy = active.length && active.every(e => e.ci95[0] <= 1 && e.ci95[1] >= 1);
+  let note = (noisy ? "The weather change is within the 2025 data's margin of error. " : "") + `The top 10 areas (1% of the city's 1 km crash grid) carry ${Math.round(top10 / tot * 100)}% of the expected risk.`;
+  if (st.src === "rp") {
+    let hit = 0; for (let i = 0; i < 50; i++) hit += actualByCell[order[i]];
+    note += ` On this day, ${actualTotal} injury crashes actually happened ${st.win === "all" ? "" : "in this window "}(black dots); the forecast's top 50 areas caught ${hit} of them (${actualTotal ? Math.round(hit / actualTotal * 100) : 0}%). The forecast was made without this day's data. Even the top area has only about a ${chance(lam[order[0]])} chance of an injury crash, so most hotspots show no dot on a single day; across all 61 held-out days the top 10 areas had a crash ${EV.top10_crash_chance_calibration_pct[st.win].observed}% of the time in this window against ${EV.top10_crash_chance_calibration_pct[st.win].predicted}% predicted.`;
+  }
+  $("sumNote").textContent = note;
+  const max = lam[order[0]] || 1;
+  $("top").innerHTML = order.slice(0, 10).map((c, i) => {
+    const acts = actionsFor(c, i);
+    return `<button class="item${st.sel === c ? " on" : ""}" data-c="${c}"><span class="rank" style="background:${riskColor(riskClass(c))}">${i + 1}</span>
+      <span class="nm">${esc(cellName(c))}<small>${cellBoro(c)}${CE.n_inj[c] ? ` · ${CE.n_inj[c]} injury crashes in Aug–Sep` : ""}</small></span>
+      <span class="val">${chance(lam[c])}<small>chance of 1+</small></span>
+      <span class="acts">${acts.map(([o, t]) => `<span class="tag ${o}"><b>${o.toUpperCase()}</b>${esc(t.split(":")[0])}</span>`).join("")}</span></button>`;
+  }).join("");
+  $("top").querySelectorAll(".item").forEach(b => b.addEventListener("click", () => select(+b.dataset.c, true)));
+  renderDetail();
+}
+
+function renderDetail() {
+  const el = $("detail");
+  if (st.sel == null) { el.innerHTML = ""; return; }
+  const c = st.sel, rank = order.indexOf(c);
+  const cyc = CE.n_inj[c] ? Math.round(CE.n_cyc[c] / CE.n_inj[c] * 100) : 0;
+  const s = CE.i311[c];
+  const acts = actionsFor(c, rank);
+  const wx = lamNormal[c] ? (lam[c] / lamNormal[c] - 1) * 100 : 0;
+  el.innerHTML = `<div class="detail">
+    <div class="row" style="justify-content:space-between"><div><h3>${esc(cellName(c))}</h3><div class="note">${cellBoro(c)} · rank ${rank + 1} of ${NC} · busiest ${peakWindow(c)}</div></div>
+      <button class="chip" id="closeDetail">Close</button></div>
+    <div class="kv">
+      <div><b>${chance(lam[c])}</b><span>chance of an injury crash here, this scenario</span></div>
+      <div><b>${Math.abs(wx) < 0.5 ? "0%" : (wx > 0 ? "+" : "−") + Math.abs(wx).toFixed(0) + "%"}</b><span>weather effect vs a dry day</span></div>
+      <div><b>${cyc}%</b><span>of injury crashes hurt a cyclist</span></div>
+      <div><b>${CE.n_all[c]}</b><span>crashes Aug–Sep</span></div>
+      <div><b>${CE.persons_inj[c]}</b><span>people injured</span></div>
+      <div><b>${CE.killed[c]}</b><span>people killed</span></div>
+    </div>
+    <div class="note">311 DOT requests here, Aug–Sep: ${s[0]} street condition · ${s[1]} street light · ${s[2]} traffic signal · ${s[3]} sidewalk or curb${s[4] ? ` · ${s[4]} not closed` : ""}</div>
+    <h2>Recommended actions</h2>
+    <ul class="actions">${acts.map(([o, t]) => `<li><span class="owner ${o}">${o.toUpperCase()}</span><span>${esc(t)}</span></li>`).join("")}</ul>
+  </div>`;
+  $("closeDetail").addEventListener("click", () => { st.sel = null; renderBrief(); render(); });
+}
+
+// commuter: straight-line corridor check
+const toXY = (lat, lng) => [(lng + 74.3) * 111320 * Math.cos(40.7 * Math.PI / 180), (lat - 40.45) * 110540];
+function corridorCells() {
+  if (st.route.length < 2) return [];
+  const [a, b] = st.route.map(p => toXY(p[0], p[1]));
+  const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1;
+  const res = [];
+  for (let c = 0; c < NC; c++) {
+    const [x, y] = toXY(CE.lat[c], CE.lng[c]);
+    const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L2));
+    const d = Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+    if (d <= 600) res.push([c, t]);
+  }
+  return res.sort((p, q) => p[1] - q[1]).map(p => p[0]);
+}
+function commScore(c) {
+  if (st.mode !== "bike") return lam[c];
+  const share = (CE.n_cyc[c] + 0.19 * 5) / (CE.n_inj[c] + 5);   // cyclist share, shrunk toward the city's ~19%
+  return lam[c] * share;
+}
+function renderComm() {
+  const out = $("commOut");
+  if (st.route.length < 2) { out.innerHTML = ""; $("commHint").textContent = st.route.length ? "Now tap your destination on the map." : "Tap your start and then your destination on the map."; return; }
+  $("commHint").innerHTML = `Route checked along a straight corridor about 600 m wide. <button class="chip" id="clearRoute">Clear route</button>`;
+  $("clearRoute").addEventListener("click", () => { st.route = []; renderComm(); render(); $("hint").textContent = "Tap your start point"; });
+  const cells = corridorCells();
+  const all = [...Array(NC).keys()].map(commScore).sort((a, b) => b - a);
+  const thr = all[Math.floor(NC * 0.10)];
+  const hot = cells.filter(c => commScore(c) >= thr);
+  const winLabel = WINDOWS.find(w => w[0] === st.win)[1];
+  const wxWord = (() => {
+    const r = st.src === "fc" ? Math.max(...st.rain) : (Math.max(...M.prcp[st.rpDay]) >= 10 ? 2 : Math.max(...M.prcp[st.rpDay]) >= 1 ? 1 : 0);
+    return r === 2 ? "Heavy rain expected. " : r === 1 ? "Rain expected. " : "";
+  })();
+  const names = hot.slice(0, 3).map(c => (CE.name[c] || cellBoro(c)));
+  const msg = hot.length
+    ? `${wxWord}Your ${st.mode === "bike" ? "ride" : "trip"} ${winLabel === "All day" ? "today" : winLabel.toLowerCase()} passes ${hot.length} of the city's highest-risk crash area${hot.length > 1 ? "s" : ""}, near ${names.join(", ")}. ${st.mode === "bike" ? "Use protected lanes where you can and watch for turning vehicles." : "Slow down and watch for cyclists and pedestrians at intersections."}`
+    : `${wxWord}No high-risk crash areas on this route ${winLabel === "All day" ? "today" : winLabel.toLowerCase()}. Ride safe.`;
+  out.innerHTML = `<div class="push"><span class="app-name">Safe Commute · alert preview</span><p>${esc(msg)}</p></div>
+    <h2 style="margin-top:6px">Along your route</h2>
+    <div class="list">${cells.length ? cells.map(c => {
+      const isHot = commScore(c) >= thr;
+      return `<button class="item" data-c="${c}"><span class="rank" style="background:${riskColor(isHot ? Math.max(2, riskClass(c)) : 0)}">${isHot ? "!" : ""}</span>
+        <span class="nm">${esc(cellName(c))}<small>${cellBoro(c)}${st.mode === "bike" && CE.n_cyc[c] ? ` · ${CE.n_cyc[c]} cyclist injury crashes Aug–Sep` : ""}</small></span>
+        <span class="val">${isHot ? "High" : "Normal"}<small>risk</small></span></button>`;
+    }).join("") : `<div class="note">No mapped areas along this line.</div>`}</div>`;
+  out.querySelectorAll(".item").forEach(b => b.addEventListener("click", () => select(+b.dataset.c, true)));
+}
+
+function renderMethod() {
+  const e = EV, ef = e.citywide_weather_effects, pct = v => (v * 100).toFixed(1) + "%";
+  const lift = o => `${((o.lift - 1) * 100 >= 0 ? "+" : "")}${((o.lift - 1) * 100).toFixed(0)}% <span style="color:var(--muted)">(${((o.ci95[0] - 1) * 100).toFixed(0)} to ${((o.ci95[1] - 1) * 100 >= 0 ? "+" : "")}${((o.ci95[1] - 1) * 100).toFixed(0)}%)</span>`;
+  const cw = e.loo_capture_top50_by_time_window;
+  $("pane-method").innerHTML = `
+    <h2>How the forecast works</h2>
+    <p>The city is split into ${e.data.cells} one-kilometre cells. For each cell the model learns how many injury crashes it normally has, how that varies by hour, and how day of week, rain and heat change the citywide rate. Each crash takes the weather of its nearest NOAA station (Central Park, LaGuardia or JFK). A forecast multiplies these together for the chosen day, weather and hours.</p>
+    <p>Weather effects are first estimated citywide, then allowed to differ by cell only as much as the data supports (an empirical Bayes prior fitted to the data). With two months of data the fitted prior left no detectable cell-to-cell difference, so every cell gets the citywide weather effect.</p>
+    <h2>What the data says about weather</h2>
+    <div class="tblwrap"><table><tr><th>Change vs a dry, normal day (95% CI)</th><th>Light rain</th><th>Heavy rain</th><th>Hot</th></tr>
+      <tr><td>All crashes</td><td>${lift(ef.all_crashes.light)}</td><td>${lift(ef.all_crashes.heavy)}</td><td>${lift(ef.all_crashes.hot)}</td></tr>
+      <tr><td>Injury crashes</td><td>${lift(ef.injury_crashes.light)}</td><td>${lift(ef.injury_crashes.heavy)}</td><td>${lift(ef.injury_crashes.hot)}</td></tr>
+      <tr><td>Cyclist injury crashes</td><td>${lift(ef.cyclist_injury_crashes.light)}</td><td>${lift(ef.cyclist_injury_crashes.heavy)}</td><td>${lift(ef.cyclist_injury_crashes.hot)}</td></tr></table></div>
+    <p>Heavy-rain days had somewhat more crashes overall but not clearly more injury crashes. Cyclist injuries fell on rainy days, most likely because fewer people ride. Rain did not move where injury crashes happen (permutation test p = ${e.rain_shifts_location_of_injury_crashes.permutation_p}). Weather here is daily, so a two-hour storm counts as a wet day, which hides short-lived effects.</p>
+    <h2>Does it predict well?</h2>
+    <p>Each day was held out in turn, the model refit on the other ${e.data.days - 1} days, and its ranking checked against that day's real injury crashes.</p>
+    <div class="tblwrap"><table><tr><th>Share of held-out injury crashes caught</th><th>Top 25 cells</th><th>Top 50</th><th>Top 100</th></tr>
+      <tr><td>Forecast</td><td class="n">${pct(e.loo_capture_all_days.forecast.top_25)}</td><td class="n">${pct(e.loo_capture_all_days.forecast.top_50)}</td><td class="n">${pct(e.loo_capture_all_days.forecast.top_100)}</td></tr>
+      <tr><td>Ranked by past crash count</td><td class="n">${pct(e.loo_capture_all_days.crash_count.top_25)}</td><td class="n">${pct(e.loo_capture_all_days.crash_count.top_50)}</td><td class="n">${pct(e.loo_capture_all_days.crash_count.top_100)}</td></tr>
+      <tr><td>Share of cells</td><td class="n">${pct(e.share_of_cells_top_k.top_25)}</td><td class="n">${pct(e.share_of_cells_top_k.top_50)}</td><td class="n">${pct(e.share_of_cells_top_k.top_100)}</td></tr></table></div>
+    <p>Risk is concentrated: 13% of cells hold about a third of injury crashes on any given day. For whole-day rankings the forecast ties a simple crash-count ranking. It gains when targeting hours: for 3–8 PM its top 50 cells caught ${pct(cw.pm.cell_profile)} of crashes against ${pct(cw.pm.all_day_rank)} for an all-day ranking (10 AM–3 PM: ${pct(cw.mid.cell_profile)} vs ${pct(cw.mid.all_day_rank)}).</p>
+    <h2>Recommended actions</h2>
+    <p>Actions are simple rules on each area's record: NYPD enforcement for every top area in its riskiest hours; EMS staging for the top 5; DOT bike-lane review where cyclists are hurt at 1.5× the city rate; signal, street-light and pavement work where 311 DOT requests are in the city's top 20% of areas. 311 counts reflect who reports problems, not verified conditions.</p>
+    <h2>Limits</h2>
+    <p>Two months of data (Aug–Sep 2025), so no snow or ice. Police-reported crashes only. No traffic volumes, so a busy area looks risky partly because it is busy. Commuter checks use a straight line between two points, not a street route. Grid cell names come from the nearest subway station.</p>`;
+}
+
+function update() {
+  compute(); updateActual();
+  $("wxLine").textContent = wxText();
+  if (st.tab === "comm") renderComm();
+  renderBrief(); renderMethod(); render(); legend();
+}
+
+function select(c, fly) {
+  st.sel = c;
+  if (fly) { const x = mx(CE.lng[c]), y = my(CE.lat[c]); view.cx = x; view.cy = y; view.scale = Math.max(view.scale, 2.2e5 * 4); }
+  if (st.tab !== "brief" && st.tab !== "comm") setTab("brief");
+  if (st.tab === "brief") { renderBrief(); $("detail").scrollIntoView({ block: "nearest" }); }
+  render();
+}
+
+// ---------- map ----------
+const map = $("map"), ctx = map.getContext("2d");
+let W = 0, H = 0, DPR = 1;
+const mx = lng => (lng + 180) / 360;
+const my = lat => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2; };
+const view = { cx: 0, cy: 0, scale: 1 };
+const sx = x => (x - view.cx) * view.scale + W / 2, sy = y => (y - view.cy) * view.scale + H / 2;
+const crX = Float64Array.from(CR.lng, mx), crY = Float64Array.from(CR.lat, my);
+const cellX = Float64Array.from(CE.lng, mx), cellY = Float64Array.from(CE.lat, my);
+const halfLat = 500 / 110540, halfLng = 500 / (111320 * Math.cos(40.7 * Math.PI / 180));
+const cellHalfX = halfLng / 360;
+let css = getComputedStyle(document.documentElement);
+const tok = k => css.getPropertyValue(k).trim();
+const riskColor = k => tok("--r" + k);
+
+let fitted = false;
+function fit() {
+  const r = map.parentElement.getBoundingClientRect(); W = r.width; H = r.height;
+  DPR = Math.min(devicePixelRatio || 1, 2); map.width = Math.max(1, Math.round(W * DPR)); map.height = Math.max(1, Math.round(H * DPR));
+  if (W < 2 || H < 2) { fitted = false; return; }
+  fitted = true;
+  const x0 = mx(-74.26), x1 = mx(-73.70), y0 = my(40.92), y1 = my(40.49);
+  view.scale = Math.min(W / (x1 - x0), H / (y1 - y0)) * 0.94;
+  view.cx = (x0 + x1) / 2; view.cy = (y0 + y1) / 2;
+  landKey = "";
+}
+let land = null, landKey = "";
+function drawLand() {
+  const key = [view.cx, view.cy, view.scale, W, H, tok("--land")].join();
+  if (key === landKey) return; landKey = key;
+  const raw = document.createElement("canvas"); raw.width = map.width; raw.height = map.height;
+  const g = raw.getContext("2d"); g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const r = Math.max(1.5, cellHalfX * 0.55 * view.scale);
+  g.fillStyle = tok("--land"); g.beginPath();
+  for (let i = 0; i < crX.length; i++) { const X = sx(crX[i]), Y = sy(crY[i]); if (X < -r || Y < -r || X > W + r || Y > H + r) continue; g.moveTo(X + r, Y); g.arc(X, Y, r, 0, 6.2832); }
+  g.fill();
+  land = document.createElement("canvas"); land.width = map.width; land.height = map.height;
+  const b = land.getContext("2d"); b.filter = `blur(${5 * DPR}px)`; b.drawImage(raw, 0, 0);
+}
+function render() {
+  css = getComputedStyle(document.documentElement);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = tok("--bg"); ctx.fillRect(0, 0, map.width, map.height);
+  if (!lam || !fitted) return;
+  drawLand(); if (land && land.width > 1) ctx.drawImage(land, 0, 0);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const commHot = st.tab === "comm" && st.route.length === 2;
+  const corridor = commHot ? new Set(corridorCells()) : null;
+  // cells
+  for (let c = 0; c < NC; c++) {
+    const k = riskClass(c);
+    const X0 = sx(mx(CE.lng[c] - halfLng)), X1 = sx(mx(CE.lng[c] + halfLng)), Y0 = sy(my(CE.lat[c] + halfLat)), Y1 = sy(my(CE.lat[c] - halfLat));
+    if (X1 < 0 || Y1 < 0 || X0 > W || Y0 > H) continue;
+    ctx.globalAlpha = corridor && !corridor.has(c) ? 0.25 : (k === 0 ? 0.55 : 0.9);
+    ctx.fillStyle = riskColor(k);
+    const gap = (X1 - X0) > 10 ? 1 : 0;
+    ctx.fillRect(X0 + gap, Y0 + gap, X1 - X0 - gap, Y1 - Y0 - gap);
+  }
+  ctx.globalAlpha = 1;
+  // real crashes when replaying
+  if (st.src === "rp") {
+    const [h0, h1] = WIN_HOURS[st.win];
+    ctx.fillStyle = tok("--crash");
+    const r = Math.max(1.6, Math.min(3.5, view.scale / 2.2e5 * 1.4));
+    ctx.beginPath();
+    for (let i = 0; i < CR.day.length; i++) {
+      if (CR.day[i] !== st.rpDay || !CR.inj[i]) continue;
+      const h = CR.hour[i]; if (!(st.win === "night" ? (h >= 20 || h < 6) : (h >= h0 && h < h1))) continue;
+      const X = sx(crX[i]), Y = sy(crY[i]); ctx.moveTo(X + r, Y); ctx.arc(X, Y, r, 0, 6.2832);
+    }
+    ctx.fill();
+  }
+  // rank labels for top 10
+  if (st.tab === "brief") {
+    ctx.font = `600 11px ${tok("--f-mono")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (let i = 9; i >= 0; i--) {
+      const c = order[i], X = sx(cellX[c]), Y = sy(cellY[c]);
+      ctx.fillStyle = tok("--fg"); ctx.beginPath(); ctx.arc(X, Y, 9, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = tok("--panel"); ctx.fillText(String(i + 1), X, Y + 0.5);
+    }
+  }
+  if (st.sel != null) {
+    const c = st.sel;
+    const X0 = sx(mx(CE.lng[c] - halfLng)), X1 = sx(mx(CE.lng[c] + halfLng)), Y0 = sy(my(CE.lat[c] + halfLat)), Y1 = sy(my(CE.lat[c] - halfLat));
+    ctx.strokeStyle = tok("--accent"); ctx.lineWidth = 3; ctx.strokeRect(X0 - 2, Y0 - 2, X1 - X0 + 4, Y1 - Y0 + 4);
+  }
+  // route
+  if (st.tab === "comm" && st.route.length) {
+    const pts = st.route.map(p => [sx(mx(p[1])), sy(my(p[0]))]);
+    ctx.strokeStyle = tok("--accent"); ctx.lineWidth = 3; ctx.setLineDash([8, 6]);
+    if (pts.length === 2) { ctx.beginPath(); ctx.moveTo(...pts[0]); ctx.lineTo(...pts[1]); ctx.stroke(); }
+    ctx.setLineDash([]);
+    pts.forEach((p, i) => { ctx.fillStyle = tok("--accent"); ctx.beginPath(); ctx.arc(p[0], p[1], 7, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.font = `700 10px ${tok("--f-body")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(i ? "B" : "A", p[0], p[1] + 0.5); });
+  }
+  // weather stations
+  ctx.font = `600 11px ${tok("--f-body")}`; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  M.stations.forEach((s, i) => {
+    const X = sx(mx(s.lng)), Y = sy(my(s.lat));
+    const r = st.src === "fc" ? st.rain[i] : (M.prcp[st.rpDay][i] >= 10 ? 2 : M.prcp[st.rpDay][i] >= 1 ? 1 : 0);
+    ctx.fillStyle = tok("--accent"); ctx.beginPath(); ctx.moveTo(X, Y - 7); ctx.lineTo(X + 6, Y + 4); ctx.lineTo(X - 6, Y + 4); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = tok("--fg"); ctx.textAlign = i === 0 ? "right" : "left";
+    ctx.fillText(W < 600 ? s.name : `${s.name}: ${["dry", "light rain", "heavy rain"][r]}`, i === 0 ? X - 9 : X + 9, Y);
+  });
+}
+function legend() {
+  css = getComputedStyle(document.documentElement);
+  const rows = [[4, "Top 1% of areas"], [3, "Top 5%"], [2, "Top 10%"], [1, "Top 25%"], [0, "Other areas with crashes"]];
+  $("legend").innerHTML = `<b style="font-size:11.5px">Injury-crash risk, this scenario</b>` + rows.map(([k, l]) => `<span><i class="sw" style="background:${riskColor(k)}"></i>${l}</span>`).join("")
+    + (st.src === "rp" ? `<span><i class="dot"></i>Real injury crash that day</span>` : "");
+}
+
+// interaction
+const ptrs = new Map(); let pinch = null, downAt = null;
+map.addEventListener("pointerdown", e => { map.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); downAt = [e.clientX, e.clientY];
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), s: view.scale }; } });
+map.addEventListener("pointermove", e => {
+  if (!ptrs.has(e.pointerId)) return;
+  const p = ptrs.get(e.pointerId);
+  if (ptrs.size === 1) { view.cx -= (e.clientX - p[0]) / view.scale; view.cy -= (e.clientY - p[1]) / view.scale; }
+  ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (ptrs.size === 2 && pinch) { const [a, b] = [...ptrs.values()]; const r = map.getBoundingClientRect(); zoomAt((a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top, pinch.s * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d / view.scale); }
+  render();
+});
+map.addEventListener("pointerup", e => {
+  ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null;
+  if (downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 5) click(e);
+  downAt = null;
+});
+map.addEventListener("pointercancel", e => { ptrs.delete(e.pointerId); pinch = null; });
+map.addEventListener("wheel", e => { e.preventDefault(); const r = map.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015)); render(); }, { passive: false });
+function zoomAt(px, py, k) {
+  const ns = Math.max(4e4, Math.min(1.2e7, view.scale * k)); k = ns / view.scale;
+  const wx = (px - W / 2) / view.scale + view.cx, wy = (py - H / 2) / view.scale + view.cy;
+  view.scale = ns; view.cx = wx - (px - W / 2) / ns; view.cy = wy - (py - H / 2) / ns;
+}
+$("zin").addEventListener("click", () => { zoomAt(W / 2, H / 2, 1.6); render(); });
+$("zout").addEventListener("click", () => { zoomAt(W / 2, H / 2, 1 / 1.6); render(); });
+function click(e) {
+  const r = map.getBoundingClientRect(), X = e.clientX - r.left, Y = e.clientY - r.top;
+  const wx = (X - W / 2) / view.scale + view.cx, wy = (Y - H / 2) / view.scale + view.cy;
+  const lng = wx * 360 - 180, lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * wy))) * 180 / Math.PI;
+  if (st.tab === "comm") {
+    if (st.route.length >= 2) st.route = [];
+    st.route.push([lat, lng]);
+    $("hint").textContent = st.route.length === 1 ? "Now tap your destination" : "Tap the map to start a new route";
+    renderComm(); render(); return;
+  }
+  let best = -1;
+  for (let c = 0; c < NC; c++) if (Math.abs(CE.lat[c] - lat) <= halfLat && Math.abs(CE.lng[c] - lng) <= halfLng) { best = c; break; }
+  st.sel = best >= 0 ? best : null;
+  if (st.tab === "method") setTab("brief");
+  renderBrief(); render();
+}
+
+addEventListener("resize", () => { fit(); render(); });
+// refit when the map area gets its real size (e.g. a preview pane that opens at 0 x 0)
+try { new ResizeObserver(() => { const r = map.parentElement.getBoundingClientRect(); if (!fitted || Math.abs(r.width - W) > 1 || Math.abs(r.height - H) > 1) { fit(); render(); } }).observe(map.parentElement); } catch (e) {}
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { landKey = ""; render(); legend(); });
+new MutationObserver(() => { landKey = ""; render(); legend(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+fillSelects(); fit();
+// open on a realistic case: a heavy-rain Friday evening rush
+st.rain = [2, 2, 2]; syncForm();
+update();
+})();
+</script>

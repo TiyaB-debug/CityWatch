@@ -1,0 +1,192 @@
+{
+    "data": {
+     "crashes_used": 14066,
+     "injury_crashes": 6536,
+     "cells": 791,
+     "days": 61,
+     "wet_days_any_station": 14,
+     "cell_size_m": 1000
+    },
+    "daily_means_central_park_rain_class": {
+     "n": {
+      "dry": 230.8,
+      "light": 227.7,
+      "heavy": 232.0
+     },
+     "inj": {
+      "dry": 107.5,
+      "light": 104.9,
+      "heavy": 106.7
+     }
+    },
+    "citywide_weather_effects": {
+     "all_crashes": {
+      "light": {
+       "lift": 1.021,
+       "ci95": [
+        0.944,
+        1.092
+       ]
+      },
+      "heavy": {
+       "lift": 1.081,
+       "ci95": [
+        1.002,
+        1.227
+       ]
+      },
+      "hot": {
+       "lift": 0.95,
+       "ci95": [
+        0.897,
+        0.998
+       ]
+      }
+     },
+     "injury_crashes": {
+      "light": {
+       "lift": 1.001,
+       "ci95": [
+        0.879,
+        1.116
+       ]
+      },
+      "heavy": {
+       "lift": 1.072,
+       "ci95": [
+        0.977,
+        1.187
+       ]
+      },
+      "hot": {
+       "lift": 0.914,
+       "ci95": [
+        0.844,
+        0.98
+       ]
+      }
+     },
+     "cyclist_injury_crashes": {
+      "light": {
+       "lift": 0.808,
+       "ci95": [
+        0.669,
+        0.93
+       ]
+      },
+      "heavy": {
+       "lift": 0.816,
+       "ci95": [
+        0.65,
+        1.107
+       ]
+      },
+      "hot": {
+       "lift": 1.032,
+       "ci95": [
+        0.873,
+        1.153
+       ]
+      }
+     }
+    },
+    "rain_shifts_location_of_injury_crashes": {
+     "G": 820.2,
+     "permutation_p": 0.526,
+     "null_mean_G": 822.7
+    },
+    "cell_prior_strength_a": {
+     "light": 10000.0,
+     "heavy": 10000.0,
+     "hot": 10000.0
+    },
+    "loo_capture_all_days": {
+     "forecast": {
+      "top_25": 0.1056,
+      "top_50": 0.1818,
+      "top_100": 0.3244
+     },
+     "no_weather": {
+      "top_25": 0.1065,
+      "top_50": 0.1818,
+      "top_100": 0.3239
+     },
+     "crash_count": {
+      "top_25": 0.1057,
+      "top_50": 0.1824,
+      "top_100": 0.3245
+     }
+    },
+    "loo_capture_wet_days": {
+     "forecast": {
+      "top_25": 0.1123,
+      "top_50": 0.1797,
+      "top_100": 0.3261
+     },
+     "no_weather": {
+      "top_25": 0.113,
+      "top_50": 0.177,
+      "top_100": 0.3254
+     },
+     "crash_count": {
+      "top_25": 0.1123,
+      "top_50": 0.1804,
+      "top_100": 0.3261
+     }
+    },
+    "loo_poisson_loglik": {
+     "all_days": {
+      "forecast": -18984.5,
+      "no_weather": -18986.8
+     },
+     "wet_days": {
+      "forecast": -4238.4,
+      "no_weather": -4237.5
+     }
+    },
+    "loo_capture_top50_by_time_window": {
+     "am": {
+      "cell_profile": 0.1563,
+      "all_day_rank": 0.1542
+     },
+     "mid": {
+      "cell_profile": 0.1952,
+      "all_day_rank": 0.1859
+     },
+     "pm": {
+      "cell_profile": 0.1959,
+      "all_day_rank": 0.176
+     },
+     "night": {
+      "cell_profile": 0.196,
+      "all_day_rank": 0.1976
+     }
+    },
+    "top10_crash_chance_calibration_pct": {
+     "all": {
+      "observed": 43.0,
+      "predicted": 45.5
+     },
+     "am": {
+      "observed": 5.7,
+      "predicted": 8.2
+     },
+     "mid": {
+      "observed": 16.9,
+      "predicted": 15.7
+     },
+     "pm": {
+      "observed": 18.4,
+      "predicted": 18.1
+     },
+     "night": {
+      "observed": 18.5,
+      "predicted": 18.4
+     }
+    },
+    "share_of_cells_top_k": {
+     "top_25": 0.0316,
+     "top_50": 0.0632,
+     "top_100": 0.1264
+    }
+   }
