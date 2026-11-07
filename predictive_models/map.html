@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CityWatch · NYC inspection planner</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  body { margin: 0; font: 15px system-ui, sans-serif; color: #182835; background: #f3f6f8; }
+  header { padding: 20px 24px; background: #102d3c; color: white; }
+  header h1, header p { margin: 0 0 6px; }
+  form { display: flex; gap: 12px; flex-wrap: wrap; padding: 14px 24px; background: white; }
+  label { display: grid; gap: 4px; font-size: 13px; }
+  input, select { font: inherit; padding: 5px; }
+  main { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); }
+  #map { height: 67vh; min-height: 420px; }
+  aside { padding: 14px 20px; max-height: 67vh; overflow: auto; }
+  li { margin: 9px 0; }
+  button { cursor: pointer; }
+  small { color: #465965; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>CityWatch</h1>
+  <p>NYC cyclist injury collisions · September 2025 historical forecast replay</p>
+  <p>Blue shows August Citi Bike endpoint activity. Red shows August injury collisions. Amber marks inspection picks.</p>
+</header>
+<form>
+  <label>Start date <input id="start" type="date" min="2025-09-01" max="2025-09-30" value="2025-09-01"></label>
+  <label>End date <input id="end" type="date" min="2025-09-01" max="2025-09-30" value="2025-09-30"></label>
+  <label>Weather <select id="weather"><option value="all">All conditions</option><option value="wet">Wet (≥ 1 mm)</option><option value="dry">Dry (&lt; 1 mm)</option></select></label>
+  <label>Model <select id="model"><option value="3">Poisson with weather</option><option value="2">Poisson without weather</option><option value="baseline">August collision baseline</option></select></label>
+  <label>Inspection budget <select id="budget"><option>5</option><option selected>10</option></select></label>
+  <label>Map area only <input id="viewport" type="checkbox"></label>
+</form>
+<main>
+  <div id="map" aria-label="NYC inspection map"></div>
+  <aside>
+    <h2>Inspection shortlist</h2>
+    <p id="context"></p>
+    <ol id="ranked"></ol>
+    <h3>September holdout</h3>
+    <p id="evaluation"></p>
+  </aside>
+</main>
+<script>
+const data = /* CITYWATCH_DATA */ null;
+const get = id => document.getElementById(id);
+const map = L.map("map").setView([40.73, -73.96], 11);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxZoom: 19
+}).addTo(map);
+const activity = L.layerGroup().addTo(map);
+const crashes = L.layerGroup().addTo(map);
+const picks = L.layerGroup().addTo(map);
+L.control.layers({}, {"August bike activity": activity, "August injury collisions": crashes}).addTo(map);
+const details = cell => `Cell ${cell.cell_id}<br>${cell.august_collisions} August injury collisions<br>${cell.bike_endpoints.toLocaleString()} August Citi Bike endpoints`;
+
+for (const cell of data.cells) {
+  const point = [cell.latitude, cell.longitude];
+  if (cell.bike_endpoints) L.circleMarker(point, {
+    radius: Math.max(2, Math.log10(cell.bike_endpoints) * 2), color: "#147ca5",
+    fillOpacity: 0.25, weight: 1
+  }).bindPopup(details(cell)).addTo(activity);
+  if (cell.august_collisions) L.circleMarker(point, {
+    radius: 2 + Math.sqrt(cell.august_collisions) * 2, color: "#bc3143",
+    fillOpacity: 0.45, weight: 1
+  }).bindPopup(details(cell)).addTo(crashes);
+}
+function render() {
+  picks.clearLayers();
+  get("ranked").replaceChildren();
+  const dates = Object.keys(data.dates).filter(date => date >= get("start").value && date <= get("end").value);
+  const model = get("model").value;
+  const weather = get("weather").value;
+  const bounds = map.getBounds();
+  const ranked = data.cells.flatMap((cell, index) => {
+    if (get("viewport").checked && !bounds.contains([cell.latitude, cell.longitude])) return [];
+    const days = dates.map(date => data.dates[date][index]).filter(row =>
+      weather === "all" || (weather === "wet" ? row[0] >= 1 : row[0] < 1));
+    if (!days.length) return [];
+    const score = model === "baseline" ? cell.august_collisions :
+      days.reduce((sum, row) => sum + row[Number(model)], 0);
+    return [{cell, score, days}];
+  }).sort((a, b) => b.score - a.score).slice(0, Number(get("budget").value));
+  get("context").textContent = ranked.length ? `${ranked.length} cells · roughly 500 m per side` :
+    "No cells match the selected dates, weather and area.";
+  ranked.forEach(({cell, score, days}, index) => {
+    const {latitude: lat, longitude: lon} = cell;
+    const marker = L.rectangle([
+      [lat - data.lat_step / 2, lon - data.lon_step / 2],
+      [lat + data.lat_step / 2, lon + data.lon_step / 2]
+    ], {color: "#a15c00", fillColor: "#ffc34a", weight: 2, fillOpacity: 0.4}).addTo(picks);
+    const scoreText = model === "baseline" ? `${score} August collisions` :
+      `${score.toFixed(2)} expected collisions across ${days.length} matching days`;
+    const rain = days.reduce((sum, row) => sum + row[0], 0) / days.length;
+    marker.bindPopup(`#${index + 1} · ${scoreText}<br>${details(cell)}<br>${rain.toFixed(1)} mm/day average rainfall`);
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.textContent = `Cell ${cell.cell_id}`;
+    button.addEventListener("click", () => { map.panTo([lat, lon]); marker.openPopup(); });
+    const evidence = document.createElement("small");
+    evidence.textContent = `${scoreText} · ${cell.august_collisions} August crashes · ${cell.bike_endpoints.toLocaleString()} bike endpoints`;
+    item.append(button, document.createElement("br"), evidence);
+    get("ranked").append(item);
+  });
+}
+const budgetResults = data.results.monthly_top_k;
+const total = data.results.september_reported_injury_collisions;
+get("evaluation").textContent = [
+  ["baseline", "August baseline"], ["no_weather", "Without weather"], ["with_weather", "With weather"]
+].map(([key, label]) => `${label}: ${budgetResults[key][5].captured}/${total} at 5 and ${budgetResults[key][10].captured}/${total} at 10`).join(" · ");
+document.querySelector("form").addEventListener("change", render);
+document.querySelector("form").addEventListener("submit", event => event.preventDefault());
+map.on("moveend", () => { if (get("viewport").checked) render(); });
+render();
+</script>
+</body>
+</html>
