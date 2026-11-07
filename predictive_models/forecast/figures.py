@@ -57,29 +57,3 @@ def render(output, metrics, future, methods):
         figure.text(.08, .035, "* November contains only the overlapping days. Sources: NYC Open Data and NOAA.",
                     fontsize=8, color="#45606b")
         figure.savefig(figures / f"{method}.png", dpi=145)
-
-    pages = output / "maps"
-    pages.mkdir(exist_ok=True)
-    template = Path(__file__).with_name("map.html").read_text()
-    cards = []
-    for method in methods:
-        columns = ["rain_mm", "temperature_c"]
-        if method != methods[0]:
-            columns.append(method)
-        payload = {
-            "label": LABELS[method], "id": method, "weather": metrics["forecast_weather"],
-            "baseline": method == methods[0],
-            "cells": cells.reset_index()[["cell_id", "latitude", "longitude", "prior_injuries"]].values.tolist(),
-            "days": {
-                date.strftime("%Y-%m-%d"): rows.set_index("cell_id").reindex(cells.index)[columns]
-                    .round(9).values.tolist()
-                for date, rows in future.groupby("date")
-            },
-        }
-        (pages / f"{method}.html").write_text(
-            template.replace("/* FORECAST */ null", json.dumps(payload, allow_nan=False))
-        )
-        cards.append(f'<a href="maps/{method}.html"><img src="figures/{method}.png" alt="">'
-                     f'<strong>{LABELS[method]}</strong><span>Open interactive Google Maps view</span></a>')
-    index = Path(__file__).with_name("gallery.html").read_text()
-    (output / "forecast_map.html").write_text(index.replace("<!-- MODEL CARDS -->", "\n".join(cards)))

@@ -1,0 +1,112 @@
+{
+  "correlation": {
+    "injuries": 1.0,
+    "rain_mm": -0.053943439948228186,
+    "temperature_c": 0.43035304057735085
+  },
+  "weather": {
+    "rain": [
+      {
+        "condition": "Dry (<1 mm)",
+        "days": 1014,
+        "raw_daily_mean": 4.292899408284024,
+        "adjusted_ratio": 1.0,
+        "interval": null
+      },
+      {
+        "condition": "Light (1\u20139.9 mm)",
+        "days": 247,
+        "raw_daily_mean": 4.064777327935222,
+        "adjusted_ratio": 0.9382536531524887,
+        "interval": [
+          0.8713696547157311,
+          1.0102714879842576
+        ]
+      },
+      {
+        "condition": "Heavy (\u226510 mm)",
+        "days": 142,
+        "raw_daily_mean": 3.795774647887324,
+        "adjusted_ratio": 0.894545335595695,
+        "interval": [
+          0.8184643930062013,
+          0.977698436576888
+        ]
+      }
+    ],
+    "temp": [
+      {
+        "condition": "Below 5 \u00b0C",
+        "days": 265,
+        "raw_daily_mean": 2.539622641509434,
+        "adjusted_ratio": 0.6635404021359579,
+        "interval": [
+          0.5757369873411977,
+          0.7647343751528387
+        ]
+      },
+      {
+        "condition": "5\u201314.9 \u00b0C",
+        "days": 434,
+        "raw_daily_mean": 3.707373271889401,
+        "adjusted_ratio": 0.8166542630385162,
+        "interval": [
+          0.7500275182640649,
+          0.8891996214786556
+        ]
+      },
+      {
+        "condition": "15\u201324.9 \u00b0C",
+        "days": 525,
+        "raw_daily_mean": 5.114285714285714,
+        "adjusted_ratio": 1.0,
+        "interval": null
+      },
+      {
+        "condition": "25 \u00b0C or above",
+        "days": 179,
+        "raw_daily_mean": 5.189944134078212,
+        "adjusted_ratio": 1.0357076744810594,
+        "interval": [
+          0.9421471662841346,
+          1.1385592669239744
+        ]
+      }
+    ]
+  },
+  "injuries": 5896,
+  "complaints": 77338,
+  "complaint_rate_ratios": {
+    "C(group)[T.1\u20132]": [
+      4.253326629112705,
+      3.102480246944034,
+      5.831072552915948
+    ],
+    "C(group)[T.3+]": [
+      9.077519433656693,
+      6.560975041392367,
+      12.559316038935542
+    ]
+  },
+  "clustering": {
+    "k": 2,
+    "silhouette": {
+      "2": 0.6382561786980506,
+      "3": 0.5663545390037414,
+      "4": 0.43298402255620816,
+      "5": 0.4022118866700331,
+      "6": 0.3393031456742309
+    },
+    "cluster_sizes": {
+      "1": 67,
+      "2": 211
+    }
+  },
+  "time_series": {
+    "train_end": "2026-04-01",
+    "holdout_start": "2026-05-01",
+    "holdout_end": "2026-10-01",
+    "seasonal_baseline_mae": 18.333333333333332,
+    "holt_winters_mae": 41.43982929292516
+  }
+}

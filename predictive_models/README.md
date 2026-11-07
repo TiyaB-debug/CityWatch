@@ -1,71 +1,45 @@
 # CityWatch predictive models
 
-CityWatch helps transportation planners decide where to inspect first when they can visit only five or ten areas. The historical analysis explains patterns in reported cyclist injuries, and the forecast map ranks areas for review.
+CityWatch helps planners decide which Manhattan areas to inspect when they can visit only five or ten locations. The analysis separates historical patterns, borough-wide forecasts, and predictions for individual street areas.
 
-## What changed over time across NYC
+## Figures for the presentation
 
-The overlapping history has **1,403 days and 18,698 reported cyclist injury collisions**. Start with these three standalone figures:
+1. [Weather, collision heat map, and 311](presentation/results/manhattan_story.png). Read this left to right. Weather describes when reported counts change, the heat map shows where crashes have clustered, and 311 adds context for where to look.
+2. [Clustering map and profiles](presentation/results/clustering.png). K-means grouped 278 cells by vehicle collisions, cyclist injury collisions, and relevant DOT complaints. Two groups gave the highest silhouette score (0.64), with 67 and 211 cells. They describe differences in recorded activity and reporting volume.
+3. [Monthly time-series forecast](presentation/results/time_series.png). This shows the observed monthly totals, a six-month holdout from May through October 2026, and three projected months. Repeating the same month last year had a lower mean absolute error (**18.3 collisions/month**) than Holt–Winters (**41.4**).
+4. [Individual inspection forecast figures](forecast/results/figures/). Use these to explain which cells the models would prioritize and how many reported injury collisions the shortlists captured on later data.
 
-- [Historical timeline](relationships/results/timeline.png) shows monthly daily averages of injury collisions and temperature, plus the share of wet days.
-- [Weather relationships](relationships/results/weather_relationships.png) shows how daily reported counts differ across rain and temperature groups after adjusting for year, month, day of week, and the other weather variable. Weather is the daily average of three NYC stations.
-- [Prior crash activity](relationships/results/crash_history_relationship.png) compares next-month counts for cells with different numbers of injury collisions the month before.
+### What to say
 
-**Heavy-rain days had about 18% fewer reported collisions than dry days** after adjustment (95% interval of roughly 13% to 23% fewer). Days below 5 °C had about **35% fewer** than days at 15–24.9 °C, while days at 25 °C or above had about **8% more**. These are citywide reported counts. The analysis has no cycling-volume denominator and cannot tell whether per-trip risk changed.
+Temperature had a moderate positive correlation with Manhattan's daily reported cyclist injury collisions (**r = +0.43**). The linear correlation with rainfall was near zero (**r = −0.05**). The adjusted model estimated about **11% fewer reported collisions on heavy-rain days** than on dry days. These counts do not measure risk per ride.
 
-Areas with **2–3 injury collisions in the prior month** averaged **22.3 per 1,000 cell-days** the next month, compared with **3.3** for areas with none. Areas with at least four averaged **38.4**, based on 138 cell-months. These descriptive groups help explain why recent crash history matters for inspection rankings. [Relationship estimates and denominators](relationships/results/relationships.json)
+Cells with at least three relevant DOT complaints in the previous month had about **9.1 times** the following month's reported injury collision count of cells with zero complaints, after adjusting for prior injury collisions and calendar month. Busy streets and differences in reporting may contribute to that relationship. 311 is used in the historical analysis and clustering. Its impact on the inspection forecast remains untested.
 
-The adjusted weather model is a Poisson regression of daily collision counts with calendar controls and seven-day HAC standard errors. Reproduce the analysis from the repository root:
+At ten inspections per month in the July–October 2026 holdout, the prior-month baseline captured **43 of 657** reported injury collisions. The validation-selected boosted model without weather captured **53**. At five locations it captured **27**, compared with **22** for the baseline. The best observed ten-location count was **60** for both regularized Poisson variants. The holdout comparison is exploratory.
 
-```sh
-python3 -m pip install -r predictive_models/requirements.txt
-python3 predictive_models/relationships/analyze.py \
-  --crashes Datasets/nyc_crashes_2023-01-01_to_2026-11-07.csv.gz \
-  --weather-dir Datasets/Weather \
-  --out predictive_models/relationships/results
-```
+## Model files and outputs
 
-## Manhattan forecast
+- [Weather association model](models/weather.py) fits adjusted Poisson rate ratios for rainfall and temperature. [Estimates](presentation/results/numbers.json)
+- [Clustering model](models/clustering.py) compares K-means with two through six groups using silhouette scores. It fits standardized log counts on January 2023–October 2026 records. [Cell assignments](presentation/results/cluster_assignments.csv)
+- [Time-series model](models/time_series.py) evaluates additive Holt–Winters with annual seasonality against the same month last year.
+- [Inspection forecast models](forecast/models.py) contain regularized and boosted Poisson models with matched weather comparisons. [Backtest](forecast/results/backtest.json) · [Daily forecasts](forecast/results/daily_forecasts.csv) · [Scenario weather](forecast/results/forecast_weather.csv)
 
-The models predict daily counts of police-reported cyclist injury collisions in roughly 500 m Manhattan cells. The crash and NOAA weather records overlap on **January 1, 2023 through November 3, 2026** and include **58,058 Manhattan collision reports**. Geocoded records are selected using the official borough polygon. Records without usable coordinates are included in the reporting totals if labeled Manhattan. Each cell uses the nearest of Central Park, LaGuardia, and JFK, the three repository stations used for consistent coverage. The models use no Citi Bike or 311 features. [NYC crash records](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95/about_data) · [NOAA GHCN daily format and units](https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt)
+The analysis uses overlapping crash and weather dates from January 1, 2023 through November 3, 2026. The time series excludes partial November from its observed monthly totals. The inspection forecasts use earlier data for training and later months for validation and testing. The included November 8–14 forward run uses simulated weather, and the runner accepts a future station-day CSV. Citi Bike is excluded.
 
-### How the forecast is evaluated
+[NYC crash reports](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95/about_data) · [NOAA station data](https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt) · [NYC 311 service requests](https://data.cityofnewyork.us/Social-Services/311-Service-Requests-from-2020-to-Present/erm2-nwe9/about_data) · [NYC borough boundaries](https://data.cityofnewyork.us/City-Government/Borough-Boundaries/gthc-hcne)
 
-January 2023 establishes the first candidate cells and lagged features. The backtest fits on February 2023–December 2025, selects a method using January–June 2026, and evaluates July–October 2026 with November 1–3 reported separately as a partial month. Candidate locations and crash features are frozen at each month start, using only prior months. The baseline ranks cells by injury collisions in the previous calendar month. Historical evaluation uses observed weather as a replay, so the reported capture does not include forecast error.
+The presentation's [311 input](presentation/inputs/manhattan_dot_311_monthly.csv.gz) contains monthly grid counts of geocoded Manhattan DOT street condition, street light, bike lane, and sidewalk condition complaints. It contains no individual request rows.
 
-The forward models are then refitted through November 3. The published **November 8–14, 2026** scenario uses weather copied from the final seven observed days. To generate predictions with actual forecast inputs, pass a station-day CSV. The forecast is for area-level inspection prioritization.
-
-### Full-month holdout results
-
-July–October 2026 contained **657** reported Manhattan cyclist injury collisions. At **10 inspections per month**, the previous-month baseline captured **43**, both regularized Poisson models captured **60**, boosted Poisson without weather captured **53**, and boosted Poisson with weather captured **58**. Validation selected boosted Poisson **without weather**. At five locations, it captured **27** versus the baseline's **22**. Boosting with weather captured **33** at five, an exploratory holdout comparison.
-
-### Model figures and outputs
-
-- [Previous-month baseline](forecast/results/figures/previous_month_baseline.png) ranks by the prior month's reported cyclist injury collision count.
-- [Poisson without weather](forecast/results/figures/poisson_no_weather.png) models daily counts from coordinates, crash history, and calendar variables.
-- [Poisson with weather](forecast/results/figures/poisson_weather.png) adds daily rain and temperature to the same model.
-- [Boosted Poisson without weather](forecast/results/figures/boosted_no_weather.png) captures nonlinear relationships in crash and calendar inputs.
-- [Boosted Poisson with weather](forecast/results/figures/boosted_weather.png) adds weather to the same nonlinear model.
-
-### Open the interactive Google Maps figures
-
-Each PNG is a static preview that opens its own model map from the [Manhattan model gallery](forecast/results/forecast_map.html). The maps provide clickable inspection cells, date and rain filters, and a five- or ten-location budget. The forecast rankings are available before connecting Google Maps.
-
-From the repository root, serve the results folder locally:
-
-```sh
-python3 -m http.server 8765 --bind 127.0.0.1 --directory predictive_models/forecast/results
-```
-
-Open `http://127.0.0.1:8765/forecast_map.html` and choose a model preview. Enter a browser API key from a Google Cloud project with Maps JavaScript API enabled and billing configured. Restrict it to the API and your site's referrer, such as `http://127.0.0.1:8765/*` for local use. The page sends the key to Google when you load the map. It does not write the key to disk or to Git. [Google Maps API setup](https://developers.google.com/maps/documentation/javascript/get-api-key)
-
-The [forecast CSV](forecast/results/daily_forecasts.csv) contains 1,946 forecasts across 278 Manhattan candidate cells and seven scenario days. Its baseline column repeats the prior-month ranking count. The model columns are expected daily collision counts. [Backtest metrics](forecast/results/backtest.json) · [Scenario weather](forecast/results/forecast_weather.csv) · [Manhattan boundary source](https://data.cityofnewyork.us/City-Government/Borough-Boundaries/gthc-hcne)
-
-### Run the Manhattan forecast
+## Reproduce
 
 From the repository root:
 
 ```sh
 python3 -m pip install -r predictive_models/requirements.txt
+python3 predictive_models/presentation/build.py \
+  --crashes Datasets/nyc_crashes_2023-01-01_to_2026-11-07.csv.gz \
+  --weather-dir Datasets/Weather
+
 python3 predictive_models/forecast/run.py \
   --crashes Datasets/nyc_crashes_2023-01-01_to_2026-11-07.csv.gz \
   --weather-dir Datasets/Weather \
@@ -73,4 +47,4 @@ python3 predictive_models/forecast/run.py \
   --out predictive_models/forecast/results
 ```
 
-Replace `--scenario-start 2026-11-08` with `--forecast path/to/weather.csv` to supply weather. Use columns `date`, `station`, `rain_mm`, and `temperature_c`, with one row per date and station. Use all three stations (`USW00094728`, `USW00014732`, `USW00094789`) for each future day within one calendar month. Crash features stay frozen at the latest issue date supported by a complete preceding month.
+To score real forecast weather, replace `--scenario-start` with `--forecast path/to/weather.csv`. Supply `date`, `station`, `rain_mm`, and `temperature_c` for each future day within one calendar month and all three stations (`USW00094728`, `USW00014732`, `USW00094789`).
