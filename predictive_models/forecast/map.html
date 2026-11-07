@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CityWatch forecast scenario</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+body{margin:0;background:#f3f7f8;color:#173743;font:15px system-ui}
+header{background:#123643;color:white;padding:18px 22px}h1,p{margin:0 0 6px}
+form{display:flex;gap:15px;flex-wrap:wrap;padding:14px 22px;background:white}
+label{display:grid;gap:4px}select,input{font:inherit}
+main{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr)}
+#map{height:68vh;min-height:400px}aside{padding:18px;overflow:auto;max-height:68vh}li{margin:8px 0}
+@media(max-width:750px){main{grid-template-columns:1fr}}
+</style>
+<header><h1>CityWatch inspection forecast</h1><p id="provenance"></p></header>
+<form>
+<label>Model<select id="method"></select></label>
+<label>Dates<select id="day"></select></label>
+<label>Conditions<select id="weather"><option value="all">All</option><option value="wet">Wet (≥ 1 mm)</option><option value="dry">Dry (&lt; 1 mm)</option></select></label>
+<label>Inspection budget<select id="budget"><option>5</option><option selected>10</option></select></label>
+<label>Visible map only<input type="checkbox" id="viewport"></label>
+</form>
+<main><div id="map" aria-label="Map of ranked inspection cells"></div><aside><h2>Inspection shortlist</h2><p id="summary"></p><ol id="ranking"></ol></aside></main>
+<script>
+const data = /* FORECAST */ null;
+const el = id => document.getElementById(id);
+const models = Object.keys(data.labels);
+for (const [key,label] of Object.entries(data.labels)) el("method").add(new Option(label,key));
+el("method").value = data.metrics.selected;
+el("day").add(new Option("All scenario days","all"));
+for (const day of Object.keys(data.days)) el("day").add(new Option(day,day));
+el("provenance").textContent = data.metrics.weather + " · Expected cyclist injury collisions by area";
+const map = L.map("map",{preferCanvas:true}).setView([40.735,-73.95],11);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"&copy; OpenStreetMap contributors"}).addTo(map);
+const marks = L.layerGroup().addTo(map);
+const history = L.layerGroup().addTo(map);
+for (const [id,lat,lon,prior] of data.cells) {
+  if (prior) L.circleMarker([lat,lon], {radius:2+Math.sqrt(prior),color:"#a44314",weight:1,fillOpacity:.35})
+    .bindPopup("Cell "+id+" · "+prior+" prior-month injury collisions").addTo(history);
+}
+L.control.layers({},{"Prior-month injury collisions":history,"Inspection shortlist":marks}).addTo(map);
+function draw() {
+  marks.clearLayers();
+  el("ranking").replaceChildren();
+  const method = models.indexOf(el("method").value), day = el("day").value, weather = el("weather").value;
+  const dates = day === "all" ? Object.keys(data.days) : [day];
+  const bounds = map.getBounds();
+  const shortlist = data.cells.flatMap(([id,lat,lon,prior],index) => {
+    if (el("viewport").checked && !bounds.contains([lat,lon])) return [];
+    const conditions = dates.map(date=>data.days[date][index]).filter(row =>
+      weather === "all" || (weather === "wet" ? row[0] >= 1 : row[0] < 1));
+    if (!conditions.length) return [];
+    const score = method === 0 ? prior : conditions.reduce((sum,row)=>sum+row[method+1],0);
+    const meanRain = conditions.reduce((sum,row)=>sum+row[0],0)/conditions.length;
+    return [{id,lat,lon,prior,score,meanRain,days:conditions.length}];
+  }).sort((a,b)=>b.score-a.score).slice(0,Number(el("budget").value));
+  el("summary").textContent = shortlist.length + " cells · about 500 m across";
+  shortlist.forEach(({id,lat,lon,prior,score,meanRain,days},index) => {
+    const marker = L.rectangle([[lat-.00225,lon-.00295],[lat+.00225,lon+.00295]],
+      {color:"#087e84",weight:2,fillOpacity:.35}).addTo(marks);
+    const estimate = method === 0 ? score+" prior-month injury collisions" : score.toFixed(2)+" expected collisions over "+days+" matching days";
+    marker.bindPopup("#"+(index+1)+" · Cell "+id+"<br>"+estimate);
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.textContent = "Cell " + id;
+    button.onclick = () => { map.panTo([lat,lon]); marker.openPopup(); };
+    item.append(button, document.createElement("br"), estimate + " · " + prior + " prior-month injuries · " + meanRain.toFixed(1) + " mm/day");
+    el("ranking").append(item);
+  });
+}
+document.querySelector("form").addEventListener("change",draw);
+map.on("moveend",()=>{if(el("viewport").checked)draw();});
+draw();
+</script>
+</html>
