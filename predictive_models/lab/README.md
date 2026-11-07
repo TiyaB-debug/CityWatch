@@ -2,16 +2,7 @@
 
 The lab forecasts **weekly police-reported cyclist injury collisions** in approximately 500 m grid cells. It compares nine fitted variants and two historical ranking baselines. Open [the generated replay](results/citywatch_lab.html) in a browser to play the 17 holdout weeks, switch models, and compare inspection budgets of 5, 10, or 20 cells. The interactive map loads Leaflet and OpenStreetMap over the internet.
 
-## Model files
-
-- [Poisson regression](models/poisson.py) estimates the number of injury collisions per cell-week.
-- [Logistic regression](models/logistic.py) estimates the probability of at least one injury collision.
-- [Random forest](models/random_forest.py) combines trees trained on bootstrap samples.
-- [Extra trees](models/extra_trees.py) combines trees with randomized splits.
-- [Gradient boosting](models/gradient_boosting.py) contains the full model and four feature-removal variants.
-- [Historical baselines](models/baselines.py) rank cells by their 13-week and 52-week injury collision counts.
-
-The files define the estimators. [train.py](train.py) prepares the inputs and runs the same validation and holdout comparison for each model.
+The [predictive models README](../README.md#models) describes each estimator and baseline.
 
 ## Results
 

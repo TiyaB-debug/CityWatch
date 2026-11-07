@@ -10,7 +10,7 @@ from sklearn.metrics import average_precision_score
 from threadpoolctl import threadpool_limits
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from citywatch import (LAT_ORIGIN, LAT_STEP, LON_ORIGIN, LON_STEP, STATIONS,
+from lab.features import (LAT_ORIGIN, LAT_STEP, LON_ORIGIN, LON_STEP, STATIONS,
                        bike_activity, grid)
 from lab.models import baselines, extra_trees, gradient_boosting, logistic, poisson, random_forest
 

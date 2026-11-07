@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from citywatch import grid
+from lab.features import grid
 
 API = "https://data.cityofnewyork.us/resource/erm2-nwe9.csv"
 FILTER = ("agency = 'DOT' and complaint_type in "

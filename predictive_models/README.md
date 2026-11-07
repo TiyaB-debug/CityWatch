@@ -1,41 +1,22 @@
 # CityWatch predictive models
 
-For the 2023–2026 weekly backtest and animated model comparison, see the [forecast lab](lab/README.md).
+CityWatch ranks roughly 500 m NYC grid cells for weekly street inspections. The models forecast reported cyclist injury collisions or the probability that a cell will have at least one. The backtest compares how many collisions each ranking captures at the same weekly inspection budget.
 
-CityWatch ranks roughly 500 m grid cells for NYC street inspection. Its interactive map shows the August cyclist injury collision counts and Citi Bike station endpoint activity behind each recommendation. Planners can change the date range, weather filter, map area, model and inspection budget.
+## Models
 
-## How CityWatch uses AI
+- [Poisson regression](lab/models/poisson.py) predicts the **expected number of injury collisions** per cell-week.
+- [Logistic regression](lab/models/logistic.py) estimates the **probability of at least one injury collision** using a linear combination of the input features.
+- [Random forest](lab/models/random_forest.py) estimates that probability by averaging decision trees trained on bootstrap samples.
+- [Extra trees](lab/models/extra_trees.py) estimates that probability using an ensemble with randomized split thresholds.
+- [Gradient boosting](lab/models/gradient_boosting.py) estimates that probability with trees trained in sequence. The full version uses crash history, weather, 311 complaints, and Citi Bike activity. Four variants remove weather, 311, or Citi Bike one at a time, or use crash history and calendar features only. These comparisons show how much each input adds to this model.
+- [Historical baselines](lab/models/baselines.py) rank cells by their 13-week or 52-week injury collision counts. They provide a benchmark at each inspection budget.
 
-CityWatch fits two regularized Poisson regression models to predict the number of reported cyclist injury collisions in each cell per day. Both models learn from August 2025 using cell identity, nearest weather-station region, August Citi Bike endpoint volume and weekends. The weather model also learns from rainfall, estimated mean daily temperature and interactions between weather, station regions and bike activity. The August collision-count baseline ranks cells by the number of reported injury collisions in August.
+## Supporting files
 
-Candidates are cells with at least one mapped August injury collision or Citi Bike endpoint. September crash labels are held out until evaluation. For the monthly inspection shortlist, daily predicted counts are summed across September and the same fixed budget is applied to each model. For weather, the map replays historical September observations as if available when making the decision. Live forecast error would need a separate evaluation.
+- [Training runner](lab/train.py) builds the features, fits models, selects a method on validation data, and evaluates it on the holdout. Add `--model Logistic` to run that model with both baselines.
+- [Feature preparation](lab/features.py) defines the spatial grid and aggregates August Citi Bike station endpoints. [311 preparation](lab/prepare_311.py) builds weekly street-complaint counts from NYC Open Data.
+- [Inputs](lab/inputs/) contains the NOAA observation snapshot and the weekly 311 aggregate used by the backtest. The [run instructions](lab/README.md#reproduce) identify the crash file, weather archive snapshot, and Citi Bike download.
+- [Results](lab/results/) contains the backtest metrics and the animated inspection replay. Download and open [the replay](lab/results/citywatch_lab.html) in a browser to compare budgets and models. [replay.html](lab/replay.html) is the template the runner uses to generate it.
+- [Requirements](requirements.txt) lists the Python dependencies.
 
-## September 2025 backtest
-
-Of 467 reported cyclist injury collisions, 446 had coordinates in the study bounds. All 467 count in the denominator, including collisions the system could not locate. One collision is one event with at least one reported cyclist injury.
-
-- **5 locations** · August baseline 2 of 467 (0.43%), without weather 1 of 467 (0.21%), with weather 2 of 467 (0.43%).
-- **10 locations** · August baseline 4 of 467 (0.86%), without weather 5 of 467 (1.07%), with weather 5 of 467 (1.07%).
-
-At ten locations, both fitted models captured one more collision than the baseline. Adding weather produced no additional capture at that budget and one additional capture at five locations compared with the fitted model without weather. The small counts and single holdout month limit what can be concluded. [Machine-readable results](backtest_metrics.json)
-
-## Run locally
-
-From this folder, with Python 3.11 or newer:
-
-```sh
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-bash download_data.sh
-python citywatch.py --crashes data/crashes.csv --weather data/weather.csv --bike-zip data/august-bike.zip
-```
-
-Open `output/citywatch_map.html` in Chrome. Leaflet and the OpenStreetMap basemap require internet access. The script also writes `output/metrics.json` and `output/daily_scores.csv`. Raw files and generated outputs stay local. The August Citi Bike archive is large, and the pipeline streams it in chunks.
-
-## Sources and limitations
-
-- The date window and three-station daily NOAA weather snapshot come from the [Rutgers Datathon repository](https://github.com/rutgersdsc/nyc-in-motion).
-- Collision reports come from [NYC Open Data](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95/about_data). Reports can be revised and exclude unreported events.
-- Bike-share endpoints come from [Citi Bike system data](https://citibikenyc.com/system-data). The modeling workflow was inspired by the [Citi Bike rebalancing project](https://github.com/danieljinchoy/citibike). Endpoint volume measures station activity and does not identify actual routes or total cycling exposure.
-- Weather is assigned from the nearest of three stations. The model estimates collision counts under observed conditions. Road conditions, causal effects and commuter route-level risk require additional data. 311 complaints were optional and are outside this model. Field inspections would determine any appropriate repairs.
+See the [forecast lab analysis](lab/README.md) for the validation and holdout results, data sources, limitations, and commands to reproduce the backtest.
