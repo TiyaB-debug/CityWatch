@@ -1,0 +1,48 @@
+{
+  "august_mapped_injury_collisions": 605,
+  "september_reported_injury_collisions": 567,
+  "september_mapped_injury_collisions": 542,
+  "candidate_cells": 2061,
+  "monthly_top_k": {
+    "baseline": {
+      "5": {
+        "captured": 3,
+        "share": 0.005291005291005291
+      },
+      "10": {
+        "captured": 6,
+        "share": 0.010582010582010581
+      }
+    },
+    "no_weather": {
+      "5": {
+        "captured": 3,
+        "share": 0.005291005291005291
+      },
+      "10": {
+        "captured": 5,
+        "share": 0.008818342151675485
+      }
+    },
+    "with_weather": {
+      "5": {
+        "captured": 3,
+        "share": 0.005291005291005291
+      },
+      "10": {
+        "captured": 5,
+        "share": 0.008818342151675485
+      }
+    },
+    "weather_rates": {
+      "5": {
+        "captured": 3,
+        "share": 0.005291005291005291
+      },
+      "10": {
+        "captured": 5,
+        "share": 0.008818342151675485
+      }
+    }
+  }
+}

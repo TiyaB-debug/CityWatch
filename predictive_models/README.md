@@ -2,6 +2,18 @@
 
 CityWatch helps planners decide which Manhattan areas to inspect when they can visit only five or ten locations. The analysis separates historical patterns, borough-wide forecasts, and predictions for individual street areas.
 
+## Datathon evaluation and working prototype
+
+The competition run uses the two organizer-provided **NYC crash and NOAA weather files**. It fits on **August 2025**, ranks roughly 500 m citywide cells, and checks reported cyclist injury collisions in **September 2025**. The baseline ranks by August injury collision counts. The matched Poisson models use the same crash-history and calendar inputs, with weather added in one version. September observations serve as a simulated forecast. [Organizer dataset repository](https://github.com/rutgersdsc/nyc-in-motion)
+
+Out of 567 September cyclist injury collisions, the August baseline and both Poisson models captured **3** at five inspections. At ten, the baseline captured **6** and both Poisson models captured **5**. Weather did not improve matched Poisson capture at either budget. The denominator includes reported events without usable coordinates. [Exact results](datathon/backtest.json)
+
+Download [the interactive prototype](datathon/citywatch_map.html) and open it in a browser. It offers date, weather, map area, model, and budget controls and shows the evidence behind each ranked cell. Leaflet and map tiles require internet access. The activity layer shows reported crashes. Citi Bike and 311 are excluded from this competition run.
+
+To reproduce this comparison, install the dependencies below and run `bash predictive_models/datathon/reproduce.sh`. The script verifies the organizer file checksums and reuses the [pinned pilot code](https://github.com/TiyaB-debug/CityWatch/tree/f41b1db983f22446cee70df3057016b9485816c7/predictive_models/lab). In a shallow clone, fetch history with `git fetch --unshallow` first. Outputs go to `predictive_models/output/datathon` unless a different output directory is supplied.
+
+The Manhattan figures below use a broader historical snapshot. They are exploratory and separate from the organizer-data evaluation. The prototype supports area-level inspection planning. Consumer route warnings would require route and exposure data. Field inspection determines whether and how to intervene.
+
 ## Figures for the presentation
 
 1. [Weather, collision heat map, and 311](presentation/results/manhattan_story.png). Read this left to right. Weather describes when reported counts change, the heat map shows where crashes have clustered, and 311 adds context for where to look.
@@ -32,6 +44,7 @@ The presentation's [311 input](presentation/inputs/manhattan_dot_311_monthly.csv
 
 ## Folder guide
 
+- [datathon/](datathon/) contains the organizer-data evaluation, map, and reproduction command.
 - [models/](models/) contains the weather, clustering, time-series, and inspection model definitions.
 - [data.py](data.py) and [inputs/](inputs/) handle shared crash and weather preparation, including the Manhattan boundary.
 - [presentation/](presentation/) contains the figure builder, aggregated 311 input, and presentation outputs.
