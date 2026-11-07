@@ -19,7 +19,7 @@ LABELS = {
 def render(output, metrics, future, methods):
     figures = output / "figures"
     figures.mkdir(exist_ok=True)
-    outlines = json.loads((ROOT / "lab/inputs/nyc_borough_outlines.json").read_text())
+    outlines = json.loads((ROOT / "forecast/inputs/nyc_borough_outlines.json").read_text())
     cells = future.groupby("cell_id").first()
     totals = future.groupby("cell_id")[methods[1:]].sum()
     totals[methods[0]] = cells[methods[0]]

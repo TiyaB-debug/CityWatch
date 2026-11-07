@@ -1,5 +1,29 @@
 # CityWatch predictive models
 
+CityWatch helps transportation planners decide where to inspect first when they can visit only five or ten areas. The historical analysis explains patterns in reported cyclist injuries, and the forecast map ranks areas for review.
+
+## What changed over time
+
+The overlapping history has **1,403 days and 18,698 reported cyclist injury collisions**. Start with these three standalone figures:
+
+- [Historical timeline](relationships/results/timeline.png) shows monthly daily averages of injury collisions and temperature, plus the share of wet days.
+- [Weather relationships](relationships/results/weather_relationships.png) shows how daily reported counts differ across rain and temperature groups after adjusting for year, month, day of week, and the other weather variable. Weather is the daily average of three NYC stations.
+- [Prior crash activity](relationships/results/crash_history_relationship.png) compares next-month counts for cells with different numbers of injury collisions the month before.
+
+**Heavy-rain days had about 18% fewer reported collisions than dry days** after adjustment (95% interval of roughly 13% to 23% fewer). Days below 5 °C had about **35% fewer** than days at 15–24.9 °C, while days at 25 °C or above had about **8% more**. These are citywide reported counts. The analysis has no cycling-volume denominator and cannot tell whether per-trip risk changed.
+
+Areas with **2–3 injury collisions in the prior month** averaged **22.3 per 1,000 cell-days** the next month, compared with **3.3** for areas with none. Areas with at least four averaged **38.4**, based on 138 cell-months. These descriptive groups help explain why recent crash history matters for inspection rankings. [Relationship estimates and denominators](relationships/results/relationships.json)
+
+The adjusted weather model is a Poisson regression of daily collision counts with calendar controls and seven-day HAC standard errors. Reproduce the analysis from the repository root:
+
+```sh
+python3 -m pip install -r predictive_models/requirements.txt
+python3 predictive_models/relationships/analyze.py \
+  --crashes Datasets/nyc_crashes_2023-01-01_to_2026-11-07.csv.gz \
+  --weather-dir Datasets/Weather \
+  --out predictive_models/relationships/results
+```
+
 ## Full-overlap forecast
 
 The models predict daily counts of police-reported cyclist injury collisions in roughly 500 m NYC cells. The crash and NOAA weather records overlap on **January 1, 2023 through November 3, 2026** and contain **344,203 collision reports**. Each cell uses the nearest of Central Park, LaGuardia, and JFK, the three repository stations used for consistent coverage. The models use no Citi Bike or 311 features. [NYC crash records](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95/about_data) · [NOAA GHCN daily format and units](https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt)
@@ -38,51 +62,3 @@ python3 predictive_models/forecast/run.py \
 ```
 
 Replace `--scenario-start 2026-11-08` with `--forecast path/to/weather.csv` to supply weather. Use columns `date`, `station`, `rain_mm`, and `temperature_c`, with one row per date and station. Use all three stations (`USW00094728`, `USW00014732`, `USW00094789`) for each future day within one calendar month. Crash features stay frozen at the latest issue date supported by a complete preceding month.
-
-## Original August–September 2025 pilot
-
-CityWatch recommends roughly 500 m NYC grid cells for street inspections. The pilot trains on **August 2025** and evaluates against reported cyclist injury collisions in **September 2025**.
-
-### Interactive map
-
-Download [citywatch_map.html](lab/results/citywatch_map.html) and open it in a browser. The map uses Leaflet and OpenStreetMap online. Adjust the September date range, select wet, dry, or warm conditions, restrict rankings to the visible map area, and choose five or ten inspections. Each recommendation shows its predicted count or baseline score, August injury history, and weather evidence.
-
-The blue layer shows August vehicle collision activity. The red layer shows August cyclist injury collisions. A separate September outcome layer follows the date range and is available for retrospective review. The pilot uses no Citi Bike data, so the blue layer measures reported collisions. September weather is an observed-weather forecast replay.
-
-### Models and individual figures
-
-- **August collision baseline** ranks cells by August cyclist injury collision count alone. [Code](lab/models/baselines.py) · [Figure](lab/results/figures/baseline.png)
-- **Poisson without weather** estimates daily counts from cell, station region, weekend status, and August non-cyclist-injury collision activity. [Code](lab/models/poisson.py) · [Figure](lab/results/figures/no_weather.png)
-- **Poisson with weather** adds rainfall, temperature, and station-level wet-day effects to the same inputs. Comparing the two Poisson variants tests the contribution of weather. [Figure](lab/results/figures/with_weather.png)
-- **Wet/dry collision rates** estimate cell-level August rates for wet and dry days, with smoothing from the broader August history. [Code](lab/models/weather_rates.py) · [Figure](lab/results/figures/weather_rates.png)
-
-### September evaluation
-
-The August dataset establishes 2,063 candidate cells. Models sum daily predictions over September and make one shortlist for each budget. The denominator is all **467** reported September cyclist injury collisions, including those without usable coordinates or outside the candidate cells.
-
-- **Five locations.** August baseline **2 of 467 (0.43%)**, Poisson without weather **2 (0.43%)**, Poisson with weather **2 (0.43%)**, and wet/dry rates **1 (0.21%)**.
-- **Ten locations.** August baseline **4 of 467 (0.86%)**, Poisson without weather **3 (0.64%)**, Poisson with weather **5 (1.07%)**, and wet/dry rates **5 (1.07%)**.
-
-Weather-aware Poisson captured one more collision than the baseline and two more than matched Poisson without weather at ten locations. It tied both at five. These small counts describe one two-month pilot. [Machine-readable results](lab/results/backtest.json)
-
-[Daily weather-aware predictions CSV](lab/results/daily_with_weather_sep_2025.csv) contains all **61,890** candidate cell-days with `cell_id`, `latitude`, `longitude`, `date`, and `with_weather`.
-
-### Data and scope
-
-- [NYC Open Data collision reports](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95/about_data) supply the labels. A collision counts once when at least one cyclist was reported injured. The pipeline uses only August and September 2025 from the repository's larger snapshot.
-- [NOAA daily summaries](https://www.ncei.noaa.gov/access/search/datasets/daily-summaries/) supply daily rainfall and temperature. Each cell uses the nearest of Central Park, LaGuardia, or JFK.
-- [NYC borough outlines](https://data.cityofnewyork.us/City-Government/Borough-Boundaries/gthc-hcne) provide map context. The optional [311 source downloader](../Datasets/311/) remains available for future analysis.
-
-The prototype supports planner review of areas for inspection. Its police reports are subject to reporting and geocoding gaps. Consumer route warnings require route and cycling exposure data. Field inspections would determine appropriate repairs.
-
-### Reproduce
-
-From the repository root:
-
-```sh
-python3 -m pip install -r predictive_models/requirements.txt
-python3 predictive_models/lab/train.py \
-  --crashes Datasets/nyc_crashes_2023-01-01_to_2026-11-07.csv.gz \
-  --weather predictive_models/lab/inputs/noaa_aug_sep_2025.csv \
-  --out predictive_models/lab/results
-```

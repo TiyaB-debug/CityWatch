@@ -9,7 +9,7 @@ import pandas as pd
 from threadpoolctl import threadpool_limits
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from lab.features import LAT_ORIGIN, LAT_STEP, LON_ORIGIN, LON_STEP, STATIONS, grid
+from forecast.features import LAT_ORIGIN, LAT_STEP, LON_ORIGIN, LON_STEP, STATIONS, grid
 from forecast.models import specifications
 from forecast.figures import render
 
