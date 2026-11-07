@@ -32,15 +32,17 @@ Training uses July 2023–early April 2026. Validation begins April 6, 2026. The
 
 ## Reproduce
 
-From the repository root:
+From the repository root, extract the weather archive from the commit used for the published backtest. The live `Datasets/Weather` folder has since been updated. If the commit is missing from a shallow clone, run `git fetch --unshallow` first.
 
 ```sh
 python3 -m pip install -r predictive_models/requirements.txt
 curl -fL https://s3.amazonaws.com/tripdata/202508-citibike-tripdata.zip -o /tmp/202508-citibike-tripdata.zip
+weather_snapshot=$(mktemp -d)
+git archive 03eb7e32afa501f43d4d010e71579ee0d9de9898 Datasets/Weather | tar -x -C "$weather_snapshot"
 python3 predictive_models/lab/train.py \
   --crashes Datasets/nyc_crashes_2023-01-01_to_2026-11-07.csv.gz \
   --weather predictive_models/lab/inputs/noaa_daily.csv \
-  --archive Datasets/Weather \
+  --archive "$weather_snapshot/Datasets/Weather" \
   --complaints predictive_models/lab/inputs/311_weekly.csv.gz \
   --bike-zip /tmp/202508-citibike-tripdata.zip \
   --out predictive_models/lab/results
