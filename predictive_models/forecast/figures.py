@@ -1,12 +1,9 @@
 """Render individual model figures and the forecast-scenario inspection map."""
-import json
-from pathlib import Path
-
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from matplotlib.patches import Polygon
 
-ROOT = Path(__file__).resolve().parents[1]
+from data import manhattan_boundary
 LABELS = {
     "previous_month_baseline": "Previous-month collision baseline",
     "poisson_no_weather": "Poisson without weather",
@@ -19,7 +16,7 @@ LABELS = {
 def render(output, metrics, future, methods):
     figures = output / "figures"
     figures.mkdir(exist_ok=True)
-    geometry = json.loads((ROOT / "forecast/inputs/manhattan.geojson").read_text())
+    geometry = manhattan_boundary()
     outlines = [polygon[0] for polygon in geometry["coordinates"]]
     cells = future.groupby("cell_id").first()
     totals = future.groupby("cell_id")[methods[1:]].sum()

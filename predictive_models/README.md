@@ -22,13 +22,20 @@ At ten inspections per month in the July–October 2026 holdout, the prior-month
 - [Weather association model](models/weather.py) fits adjusted Poisson rate ratios for rainfall and temperature. [Estimates](presentation/results/numbers.json)
 - [Clustering model](models/clustering.py) compares K-means with two through six groups using silhouette scores. It fits standardized log counts on January 2023–October 2026 records. [Cell assignments](presentation/results/cluster_assignments.csv)
 - [Time-series model](models/time_series.py) evaluates additive Holt–Winters with annual seasonality against the same month last year.
-- [Inspection forecast models](forecast/models.py) contain regularized and boosted Poisson models with matched weather comparisons. [Backtest](forecast/results/backtest.json) · [Daily forecasts](forecast/results/daily_forecasts.csv) · [Scenario weather](forecast/results/forecast_weather.csv)
+- [Inspection forecast models](models/inspection.py) contain regularized and boosted Poisson models with matched weather comparisons. [Backtest](forecast/results/backtest.json) · [Daily forecasts](forecast/results/daily_forecasts.csv) · [Scenario weather](forecast/results/forecast_weather.csv)
 
 The analysis uses overlapping crash and weather dates from January 1, 2023 through November 3, 2026. The time series excludes partial November from its observed monthly totals. The inspection forecasts use earlier data for training and later months for validation and testing. The included November 8–14 forward run uses simulated weather, and the runner accepts a future station-day CSV. Citi Bike is excluded.
 
 [NYC crash reports](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95/about_data) · [NOAA station data](https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt) · [NYC 311 service requests](https://data.cityofnewyork.us/Social-Services/311-Service-Requests-from-2020-to-Present/erm2-nwe9/about_data) · [NYC borough boundaries](https://data.cityofnewyork.us/City-Government/Borough-Boundaries/gthc-hcne)
 
 The presentation's [311 input](presentation/inputs/manhattan_dot_311_monthly.csv.gz) contains monthly grid counts of geocoded Manhattan DOT street condition, street light, bike lane, and sidewalk condition complaints. It contains no individual request rows.
+
+## Folder guide
+
+- [models/](models/) contains the weather, clustering, time-series, and inspection model definitions.
+- [data.py](data.py) and [inputs/](inputs/) handle shared crash and weather preparation, including the Manhattan boundary.
+- [presentation/](presentation/) contains the figure builder, aggregated 311 input, and presentation outputs.
+- [forecast/](forecast/) contains the training and scoring runner, individual forecast figures, and validation results.
 
 ## Reproduce
 

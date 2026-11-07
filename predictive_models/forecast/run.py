@@ -9,8 +9,8 @@ import pandas as pd
 from threadpoolctl import threadpool_limits
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from forecast.features import LAT_ORIGIN, LAT_STEP, LON_ORIGIN, LON_STEP, STATIONS, grid, in_manhattan
-from forecast.models import specifications
+from data import STATIONS, load_overlap, locations, manhattan_crashes
+from models.inspection import specifications
 from forecast.figures import render
 
 VALIDATION = pd.Timestamp("2026-01-01")
@@ -18,48 +18,6 @@ HOLDOUT = pd.Timestamp("2026-07-01")
 BASELINE = "previous_month_baseline"
 METHODS = [BASELINE, *specifications()]
 BUDGETS = (5, 10)
-
-
-def load(crash_path, weather_dir):
-    cols = ["collision_id", "crash_date", "latitude", "longitude", "borough", "number_of_cyclist_injured"]
-    crashes = pd.read_csv(crash_path, usecols=cols).drop_duplicates("collision_id")
-    crashes["date"] = pd.to_datetime(crashes.crash_date, format="mixed").dt.normalize()
-    crashes["injury"] = crashes.number_of_cyclist_injured.gt(0).astype("int8")
-    stations = []
-    for station in STATIONS:
-        cols = ["DATE", "PRCP", "TMAX", "TMIN", "PRCP_ATTRIBUTES", "TMAX_ATTRIBUTES", "TMIN_ATTRIBUTES"]
-        rows = pd.read_csv(weather_dir / f"{station}.csv", usecols=cols)
-        for col in ("PRCP", "TMAX", "TMIN"):
-            flagged = rows[col + "_ATTRIBUTES"].fillna("").str.split(",").str[1].fillna("").ne("")
-            rows.loc[flagged, col] = np.nan
-        # GHCN daily archive files use tenths of mm and tenths of degrees C.
-        stations.append(pd.DataFrame({"date": pd.to_datetime(rows.DATE), "station": station,
-                                      "rain_mm": rows.PRCP / 10,
-                                      "temperature_c": (rows.TMAX + rows.TMIN) / 20}))
-    weather = pd.concat(stations, ignore_index=True)
-    weather = weather.dropna().loc[lambda rows: rows.rain_mm.ge(0)]
-    complete = weather.groupby("date").station.nunique()
-    complete = complete.loc[complete.eq(len(STATIONS))].index
-    start = max(crashes.date.min(), complete.min())
-    stop = min(crashes.date.max(), complete.max())
-    dates = pd.date_range(start, stop)
-    if not dates.isin(complete).all():
-        raise ValueError("Weather has missing station-days inside the overlap")
-    crashes = crashes.loc[crashes.date.between(start, stop)]
-    return crashes, weather.loc[weather.date.between(start, stop)], dates
-
-
-def locations(mapped):
-    cells = mapped.groupby(["y", "x"]).date.min().rename("first_seen").reset_index()
-    cells["cell_id"] = cells.y.astype(str) + "-" + cells.x.astype(str)
-    cells["latitude"] = LAT_ORIGIN + (cells.y + .5) * LAT_STEP
-    cells["longitude"] = LON_ORIGIN + (cells.x + .5) * LON_STEP
-    cells["station"] = [
-        min(STATIONS, key=lambda name: (lat - STATIONS[name][0]) ** 2
-            + (.76 * (lon - STATIONS[name][1])) ** 2)
-        for lat, lon in zip(cells.latitude, cells.longitude)
-    ]
-    return cells
 
 
 def snapshot(cells, monthly, origin):
@@ -148,11 +106,8 @@ def main():
     forecast.add_argument("--forecast", type=Path, help="CSV with date, station, rain_mm, temperature_c")
     forecast.add_argument("--scenario-start", type=pd.Timestamp, help="First day for a seven-day weather simulation")
     args = parser.parse_args()
-    crashes, weather, dates = load(args.crashes, args.weather_dir)
-    inside = in_manhattan(crashes)
-    geocoded = crashes.latitude.between(40.48, 40.93) & crashes.longitude.between(-74.27, -73.68)
-    mapped = grid(crashes.loc[inside], "latitude", "longitude")
-    crashes = crashes.loc[inside | (~geocoded & crashes.borough.eq("MANHATTAN"))]
+    crashes, weather, dates = load_overlap(args.crashes, args.weather_dir)
+    crashes, mapped = manhattan_crashes(crashes)
     mapped["cell_id"] = mapped.y.astype(str) + "-" + mapped.x.astype(str)
     mapped["month"] = mapped.date.dt.to_period("M").dt.to_timestamp()
     cells = locations(mapped)

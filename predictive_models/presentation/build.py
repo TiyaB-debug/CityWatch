@@ -3,7 +3,9 @@ import argparse
 import json
 import sys
 from pathlib import Path
-import pandas as pd,numpy as np
+
+import numpy as np
+import pandas as pd
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from matplotlib.figure import Figure
@@ -12,7 +14,8 @@ from matplotlib.patches import Polygon
 from matplotlib.colors import LogNorm
 root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(root / "predictive_models"))
-from forecast.run import load, grid, locations, in_manhattan
+from data import (LAT_ORIGIN, LAT_STEP, LON_ORIGIN, LON_STEP, load_overlap,
+                  locations, manhattan_boundary, manhattan_crashes)
 from models.weather import daily_history, adjusted_weather
 from models.clustering import cluster
 from models.time_series import backtest
@@ -24,11 +27,9 @@ parser.add_argument("--out", type=Path, default=Path(__file__).with_name("result
 args = parser.parse_args()
 out = args.out
 out.mkdir(parents=True, exist_ok=True)
-crashes, weather, dates = load(args.crashes, args.weather_dir)
-inside=in_manhattan(crashes)
-valid=crashes.latitude.between(40.48,40.93)&crashes.longitude.between(-74.27,-73.68)
-mapped=grid(crashes.loc[inside],'latitude','longitude')
-daily=daily_history(crashes.loc[inside|(~valid&crashes.borough.eq('MANHATTAN'))],weather.loc[weather.station.eq('USW00094728')],dates)
+crashes, weather, dates = load_overlap(args.crashes, args.weather_dir)
+reported, mapped = manhattan_crashes(crashes)
+daily = daily_history(reported, weather.loc[weather.station.eq("USW00094728")], dates)
 effects=adjusted_weather(daily)
 corr=daily[['injuries','rain_mm','temperature_c']].corr().loc['injuries'].to_dict()
 requests = pd.read_csv(Path(__file__).with_name("inputs") / "manhattan_dot_311_monthly.csv.gz")
@@ -69,10 +70,9 @@ a.axvline(1,ls='--',color='#687f88')
 a.set_yticks([0,1],['Heavy rain','Below 5 °C'])
 a.set(xlim=(.52,1.16),ylim=(1.55,-.55),xlabel='Adjusted count ratio',title='1  Weather and collision counts')
 a.text(.5,-.23,'Compared with dry days and 15–24.9 °C',transform=a.transAxes,ha='center',fontsize=8)
-geo=json.loads((root/'predictive_models/forecast/inputs/manhattan.geojson').read_text())
+geo = manhattan_boundary()
 for poly in geo['coordinates']: b.add_patch(Polygon(poly[0],facecolor='#dce8eb',edgecolor='#9cb3bb',lw=.35))
 heat=mapped.loc[mapped.injury.gt(0)].groupby(['y','x']).injury.sum().reset_index()
-from forecast.features import LAT_ORIGIN,LAT_STEP,LON_ORIGIN,LON_STEP
 points=b.scatter(LON_ORIGIN+(heat.x+.5)*LON_STEP,LAT_ORIGIN+(heat.y+.5)*LAT_STEP,c=heat.injury,
     cmap='YlOrRd',norm=LogNorm(vmin=1,vmax=heat.injury.max()),s=25,marker='s')
 b.set(xlim=(-74.025,-73.90),ylim=(40.695,40.888),aspect=1/.76,title='2  Where collisions cluster')
