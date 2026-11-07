@@ -1,5 +1,7 @@
 # CityWatch predictive models
 
+For the 2023–2026 weekly backtest and animated model comparison, see the [forecast lab](lab/README.md).
+
 CityWatch ranks roughly 500 m grid cells for NYC street inspection. Its interactive map shows the August cyclist injury collision counts and Citi Bike station endpoint activity behind each recommendation. Planners can change the date range, weather filter, map area, model and inspection budget.
 
 ## How CityWatch uses AI
