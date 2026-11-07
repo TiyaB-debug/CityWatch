@@ -11,9 +11,9 @@ from threadpoolctl import threadpool_limits
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lab.features import (LAT_ORIGIN, LAT_STEP, LON_ORIGIN, LON_STEP, STATIONS,
-                       bike_activity, grid)
+                       grid)
 from lab.figures import write_figures
-from lab.models import baselines, extra_trees, gradient_boosting, logistic, poisson, random_forest
+from lab.models import baselines, hurdle, logistic, poisson, seasonal, spatial
 
 WEEKS = pd.date_range("2023-01-02", "2026-10-26", freq="W-MON")
 TRAIN_START = pd.Timestamp("2023-07-03")
@@ -24,7 +24,6 @@ CRASH = ["latitude", "longitude", "injury_4", "injury_13", "injury_52",
          "all_4", "all_13", "nearby_13", "season_sin", "season_cos"]
 WEATHER = ["rain", "wet_days", "temp", "archive_rain"]
 COMPLAINT = ["requests_4", "requests_13"]
-BIKE = ["bike_endpoints", "bike_available"]
 
 
 def week_of(values):
@@ -125,27 +124,15 @@ def add_complaints(rows, path):
     return rows, metadata["projected_requests"]
 
 
-def add_bike(rows, path):
-    activity = bike_activity(path)
-    rows = rows.join(activity, on=["y", "x"])
-    rows["bike_available"] = rows.week.ge("2025-09-01").astype(int)
-    rows["bike_endpoints"] = rows.bike_endpoints.fillna(0) * rows.bike_available
-    return rows, int(activity.sum())
-
-
 def model_specs():
-    features = CRASH + WEATHER + COMPLAINT + BIKE
-    specs = {
+    features = CRASH + WEATHER + COMPLAINT
+    return {
         "Poisson": (poisson.build, features, True),
         "Logistic": (logistic.build, features, False),
-        "Random forest": (random_forest.build, features, False),
-        "Extra trees": (extra_trees.build, features, False),
+        "Hurdle": (hurdle.build, features, True),
+        "Seasonal analog": (seasonal.scores, None, True),
+        "Spatial shrinkage": (spatial.scores, None, True),
     }
-    specs.update({
-        name: (gradient_boosting.build, columns, False)
-        for name, columns in gradient_boosting.variants(CRASH, WEATHER, COMPLAINT, BIKE).items()
-    })
-    return specs
 
 
 def fit(rows, models):
@@ -153,6 +140,10 @@ def fit(rows, models):
     evaluated = rows.loc[rows.week.ge(VALIDATION)].copy()
     baselines.add_scores(evaluated)
     for name, (build, columns, count) in models.items():
+        if columns is None:
+            print(f"Scoring {name} using lagged crash history", flush=True)
+            evaluated[name] = build(rows).loc[evaluated.index]
+            continue
         model = build()
         print(f"Fitting {name} on {len(train):,} cell-weeks", flush=True)
         median = train[columns].median().fillna(0)
@@ -196,7 +187,7 @@ def score(rows, models, denominator, frames=False):
 def paired_interval(replay, test, chosen):
     actual = np.array([week["total"] for week in replay[chosen]])
     delta = (np.array(test[chosen]["capture"][10]["weekly"])
-             - np.array(test["13-week baseline"]["capture"][10]["weekly"]))
+             - np.array(test["52-week baseline"]["capture"][10]["weekly"]))
     rng = np.random.default_rng(42)
     # Circular three-week blocks retain short-range dependence between neighboring weeks.
     starts = rng.integers(len(actual), size=(3000, int(np.ceil(len(actual) / 3))))
@@ -211,7 +202,6 @@ def main():
     parser.add_argument("--weather", type=Path, required=True)
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--complaints", type=Path, required=True)
-    parser.add_argument("--bike-zip", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     specs = model_specs()
     parser.add_argument("--model", action="append", choices=specs,
@@ -222,7 +212,6 @@ def main():
     rows, totals, crash_count = crash_panel(args.crashes)
     rows, stations = add_weather(rows, args.weather, args.archive)
     rows, requests = add_complaints(rows, args.complaints)
-    rows, endpoints = add_bike(rows, args.bike_zip)
     evaluated, models = fit(rows, selected_specs)
     validation, _, validation_total = score(evaluated.loc[evaluated.week.lt(TEST)], models, totals)
     chosen = max(models, key=lambda model: (validation[model]["capture"][10]["count"],
@@ -237,12 +226,22 @@ def main():
         "cells": int(rows.cell_id.nunique()),
         "all_crash_records_in_weeks": crash_count,
         "projected_311_requests": requests,
-        "august_bike_endpoints": endpoints,
         "archive_stations": list(stations),
         "weather_missing_test_cell_weeks": int(test_rows[WEATHER].isna().any(axis=1).sum()),
         "validation": validation,
         "test": test,
-        "paired_10_share_interval": paired_interval(replay, test, chosen),
+        "paired_10_share_interval_vs_52_week": paired_interval(replay, test, chosen),
+    }
+    baseline_cells = [
+        {tuple(cell[:2]) for cell in frame["cells"][:10]}
+        for frame in replay["52-week baseline"]
+    ]
+    result["mean_top_10_replacements_vs_52_week"] = {
+        model: float(np.mean([
+            len({tuple(cell[:2]) for cell in frame["cells"][:10]} - baseline)
+            for frame, baseline in zip(frames, baseline_cells)
+        ]))
+        for model, frames in replay.items()
     }
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "backtest.json").write_text(json.dumps(result, indent=2) + "\n")

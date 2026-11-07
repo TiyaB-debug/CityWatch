@@ -20,7 +20,7 @@ PAPER = "#f3f7f8"
 OUTLINES = Path(__file__).with_name("inputs") / "nyc_borough_outlines.json"
 
 
-def draw_maps(figure, grid, frames, outlines):
+def draw_maps(figure, grid, frames, baseline_frames, outlines):
     for column, index in enumerate((0, len(frames) // 2, len(frames) - 1)):
         frame = frames[index]
         ax = figure.add_subplot(grid[0, column], facecolor=PAPER)
@@ -28,16 +28,20 @@ def draw_maps(figure, grid, frames, outlines):
             ax.add_patch(Polygon(outline, closed=True, facecolor="#dce8eb",
                                  edgecolor="#9cb3bb", linewidth=.45))
         picks = frame["cells"][:10]
-        for lat, lon, injuries in picks:
+        chosen = {tuple(cell[:2]) for cell in picks}
+        baseline = {tuple(cell[:2]) for cell in baseline_frames[index]["cells"][:10]}
+        for lat, lon in sorted(chosen | baseline):
             bounds = [[lon-LON_STEP/2, lat-LAT_STEP/2], [lon+LON_STEP/2, lat-LAT_STEP/2],
                       [lon+LON_STEP/2, lat+LAT_STEP/2], [lon-LON_STEP/2, lat+LAT_STEP/2]]
-            ax.add_patch(Polygon(bounds, closed=True, facecolor=ORANGE if injuries else "none",
-                                 edgecolor=ORANGE if injuries else TEAL, linewidth=1.35, zorder=3))
+            point = (lat, lon)
+            color = TEAL if point in chosen - baseline else ORANGE if point in baseline - chosen else MUTED
+            ax.add_patch(Polygon(bounds, closed=True, facecolor=color,
+                                 edgecolor=color, linewidth=.65, zorder=3))
         ax.set(xlim=(-74.27, -73.68), ylim=(40.48, 40.93), aspect=1/.76)
         ax.set_axis_off()
         week = date.fromisoformat(frame["date"])
         captured = int(sum(cell[2] for cell in picks))
-        ax.set_title(f"Week of {week:%b %d}  ·  {captured} captured",
+        ax.set_title(f"{week:%b %d}  ·  {len(chosen - baseline)} swaps  ·  {captured} captured",
                      color=INK, fontsize=11, loc="left", pad=7)
 
 
@@ -45,20 +49,20 @@ def draw_capture(ax, frames, metrics, baseline):
     weeks = [date.fromisoformat(frame["date"]) for frame in frames]
     for budget, color in ((5, "#6c57a5"), (10, TEAL), (20, "#1c4d83")):
         weekly = metrics["capture"][budget]["weekly"]
-        ax.plot(weeks, list(accumulate(weekly)), color=color, linewidth=2,
+        reference = baseline["capture"][budget]["weekly"]
+        deltas = [current - prior for current, prior in zip(weekly, reference)]
+        ax.plot(weeks, list(accumulate(deltas)), color=color, linewidth=2,
                 label=f"{budget} cells per week")
-    if metrics is not baseline:
-        ax.plot(weeks, list(accumulate(baseline["capture"][10]["weekly"])), color=MUTED,
-                linestyle="--", linewidth=1.5, label="52-week baseline · 10 cells")
-    ax.set_title("Cumulative injury collisions captured", loc="left", color=INK,
+    ax.axhline(0, color=MUTED, linestyle="--", linewidth=1)
+    ax.set_title("Cumulative capture change vs. the 52-week baseline", loc="left", color=INK,
                  fontsize=12, fontweight="bold")
-    ax.set(xlabel="Holdout week starting (2026)", ylabel="Collisions captured (count)", ylim=(0, None))
+    ax.set(xlabel="Holdout week starting (2026)", ylabel="Change in collisions captured")
     ticks = weeks[::4]
     ax.set_xticks(ticks, [week.strftime("%b %d") for week in ticks])
     ax.grid(axis="y", color="#d9e4e7")
     ax.spines[["top", "right"]].set_visible(False)
     ax.tick_params(colors=MUTED, labelsize=9)
-    ax.legend(loc="upper left", frameon=False, fontsize=9, ncols=2)
+    ax.legend(loc="lower right", bbox_to_anchor=(1, 1.01), frameon=False, fontsize=9, ncols=3)
 
 
 def write_figures(directory, result, frames_by_model):
@@ -77,13 +81,12 @@ def write_figures(directory, result, frames_by_model):
         captured = metrics["capture"][10]["count"]
         figure.text(.09, .851, f"{captured} of {result['test_total']:,} reported injury collisions captured"
                     "  ·  10 inspections per week  ·  Jul 6–Nov 1, 2026", color=MUTED, fontsize=11)
-        draw_maps(figure, grid, frames, outlines)
+        draw_maps(figure, grid, frames, frames_by_model["52-week baseline"], outlines)
         figure.legend(handles=[
-            Line2D([], [], marker="s", linestyle="", markerfacecolor="none",
-                   markeredgecolor=TEAL, label="Recommended cell"),
-            Line2D([], [], marker="s", linestyle="", color=ORANGE,
-                   label="Recommended cell with an observed injury collision"),
-        ], loc="upper left", bbox_to_anchor=(.083, .50), ncols=2, frameon=False, fontsize=9)
+            Line2D([], [], marker="s", linestyle="", color=TEAL, label="Added by this model"),
+            Line2D([], [], marker="s", linestyle="", color=ORANGE, label="52-week baseline only"),
+            Line2D([], [], marker="s", linestyle="", color=MUTED, label="Picked by both"),
+        ], loc="upper left", bbox_to_anchor=(.083, .50), ncols=3, frameon=False, fontsize=9)
         draw_capture(figure.add_subplot(grid[1, :], facecolor=PAPER), frames, metrics, baseline)
         figure.text(.09, .039, "Source: CityWatch holdout · NYC Open Data crashes. "
                     "Borough outlines: NYC Department of City Planning.", color=MUTED, fontsize=8)
