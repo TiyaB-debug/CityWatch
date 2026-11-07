@@ -9,7 +9,7 @@ import pandas as pd
 from threadpoolctl import threadpool_limits
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from forecast.features import LAT_ORIGIN, LAT_STEP, LON_ORIGIN, LON_STEP, STATIONS, grid
+from forecast.features import LAT_ORIGIN, LAT_STEP, LON_ORIGIN, LON_STEP, STATIONS, grid, in_manhattan
 from forecast.models import specifications
 from forecast.figures import render
 
@@ -21,7 +21,7 @@ BUDGETS = (5, 10)
 
 
 def load(crash_path, weather_dir):
-    cols = ["collision_id", "crash_date", "latitude", "longitude", "number_of_cyclist_injured"]
+    cols = ["collision_id", "crash_date", "latitude", "longitude", "borough", "number_of_cyclist_injured"]
     crashes = pd.read_csv(crash_path, usecols=cols).drop_duplicates("collision_id")
     crashes["date"] = pd.to_datetime(crashes.crash_date, format="mixed").dt.normalize()
     crashes["injury"] = crashes.number_of_cyclist_injured.gt(0).astype("int8")
@@ -149,7 +149,10 @@ def main():
     forecast.add_argument("--scenario-start", type=pd.Timestamp, help="First day for a seven-day weather simulation")
     args = parser.parse_args()
     crashes, weather, dates = load(args.crashes, args.weather_dir)
-    mapped = grid(crashes, "latitude", "longitude")
+    inside = in_manhattan(crashes)
+    geocoded = crashes.latitude.between(40.48, 40.93) & crashes.longitude.between(-74.27, -73.68)
+    mapped = grid(crashes.loc[inside], "latitude", "longitude")
+    crashes = crashes.loc[inside | (~geocoded & crashes.borough.eq("MANHATTAN"))]
     mapped["cell_id"] = mapped.y.astype(str) + "-" + mapped.x.astype(str)
     mapped["month"] = mapped.date.dt.to_period("M").dt.to_timestamp()
     cells = locations(mapped)
@@ -184,7 +187,7 @@ def main():
     future = panel(snapshot(cells, monthly, origin), scenario)
     fit_predict(historical, future)
     args.out.mkdir(parents=True, exist_ok=True)
-    metrics = {"overlap_start": str(dates[0].date()), "overlap_end": str(dates[-1].date()),
+    metrics = {"scope": "Manhattan borough", "overlap_start": str(dates[0].date()), "overlap_end": str(dates[-1].date()),
                "backtest_training_start": str(historical.date.min().date()),
                "backtest_training_end": str((VALIDATION - pd.Timedelta(days=1)).date()),
                "forecast_training_end": str(dates[-1].date()),

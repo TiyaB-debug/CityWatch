@@ -2,7 +2,7 @@
 
 CityWatch helps transportation planners decide where to inspect first when they can visit only five or ten areas. The historical analysis explains patterns in reported cyclist injuries, and the forecast map ranks areas for review.
 
-## What changed over time
+## What changed over time across NYC
 
 The overlapping history has **1,403 days and 18,698 reported cyclist injury collisions**. Start with these three standalone figures:
 
@@ -24,9 +24,9 @@ python3 predictive_models/relationships/analyze.py \
   --out predictive_models/relationships/results
 ```
 
-## Full-overlap forecast
+## Manhattan forecast
 
-The models predict daily counts of police-reported cyclist injury collisions in roughly 500 m NYC cells. The crash and NOAA weather records overlap on **January 1, 2023 through November 3, 2026** and contain **344,203 collision reports**. Each cell uses the nearest of Central Park, LaGuardia, and JFK, the three repository stations used for consistent coverage. The models use no Citi Bike or 311 features. [NYC crash records](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95/about_data) · [NOAA GHCN daily format and units](https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt)
+The models predict daily counts of police-reported cyclist injury collisions in roughly 500 m Manhattan cells. The crash and NOAA weather records overlap on **January 1, 2023 through November 3, 2026** and include **58,058 Manhattan collision reports**. Geocoded records are selected using the official borough polygon. Records without usable coordinates are included in the reporting totals if labeled Manhattan. Each cell uses the nearest of Central Park, LaGuardia, and JFK, the three repository stations used for consistent coverage. The models use no Citi Bike or 311 features. [NYC crash records](https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95/about_data) · [NOAA GHCN daily format and units](https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt)
 
 ### How the forecast is evaluated
 
@@ -36,7 +36,7 @@ The forward models are then refitted through November 3. The published **Novembe
 
 ### Full-month holdout results
 
-July–October 2026 contained 2,076 reported cyclist injury collisions. At **10 inspections per month**, the previous-month baseline captured **43**, both regularized Poisson models captured **57**, boosted Poisson without weather captured **59**, and boosted Poisson with weather captured **62**. Validation selected boosted Poisson **without weather**. At five locations, that model captured **25** versus the baseline's **27**. Boosting with weather captured **31** at five and was the strongest model observed on the holdout, an exploratory comparison. Adding weather tied within the regularized Poisson pair and added six captures at five locations and three at ten within the boosted pair on the holdout. On November 1–3, all methods captured one of 33 reported injury collisions at both budgets.
+July–October 2026 contained **657** reported Manhattan cyclist injury collisions. At **10 inspections per month**, the previous-month baseline captured **43**, both regularized Poisson models captured **60**, boosted Poisson without weather captured **53**, and boosted Poisson with weather captured **58**. Validation selected boosted Poisson **without weather**. At five locations, it captured **27** versus the baseline's **22**. Boosting with weather captured **33** at five, an exploratory holdout comparison.
 
 ### Model figures and outputs
 
@@ -46,9 +46,21 @@ July–October 2026 contained 2,076 reported cyclist injury collisions. At **10 
 - [Boosted Poisson without weather](forecast/results/figures/boosted_no_weather.png) captures nonlinear relationships in crash and calendar inputs.
 - [Boosted Poisson with weather](forecast/results/figures/boosted_weather.png) adds weather to the same nonlinear model.
 
-Download [the forecast inspection map](forecast/results/forecast_map.html) and open it in a browser. It has model, date, rain, location, and budget controls. The basemap requires internet access. The [forecast CSV](forecast/results/daily_forecasts.csv) includes all candidate cells for each scenario day. Its baseline column repeats the prior-month ranking count as supporting evidence. The other model columns are expected daily collision counts. [Backtest metrics](forecast/results/backtest.json) · [Scenario weather](forecast/results/forecast_weather.csv)
+### Open the interactive Google Maps figures
 
-### Run the full-overlap forecast
+Each PNG is a static preview that opens its own model map from the [Manhattan model gallery](forecast/results/forecast_map.html). The maps provide clickable inspection cells, date and rain filters, and a five- or ten-location budget. The forecast rankings are available before connecting Google Maps.
+
+From the repository root, serve the results folder locally:
+
+```sh
+python3 -m http.server 8765 --bind 127.0.0.1 --directory predictive_models/forecast/results
+```
+
+Open `http://127.0.0.1:8765/forecast_map.html` and choose a model preview. Enter a browser API key from a Google Cloud project with Maps JavaScript API enabled and billing configured. Restrict it to the API and your site's referrer, such as `http://127.0.0.1:8765/*` for local use. The page sends the key to Google when you load the map. It does not write the key to disk or to Git. [Google Maps API setup](https://developers.google.com/maps/documentation/javascript/get-api-key)
+
+The [forecast CSV](forecast/results/daily_forecasts.csv) contains 1,946 forecasts across 278 Manhattan candidate cells and seven scenario days. Its baseline column repeats the prior-month ranking count. The model columns are expected daily collision counts. [Backtest metrics](forecast/results/backtest.json) · [Scenario weather](forecast/results/forecast_weather.csv) · [Manhattan boundary source](https://data.cityofnewyork.us/City-Government/Borough-Boundaries/gthc-hcne)
+
+### Run the Manhattan forecast
 
 From the repository root:
 

@@ -22,3 +22,25 @@ def grid(frame, latitude, longitude):
     result["y"] = ((lat[valid] - LAT_ORIGIN) / LAT_STEP).astype(int)
     result["x"] = ((lon[valid] - LON_ORIGIN) / LON_STEP).astype(int)
     return result
+
+
+def in_manhattan(frame):
+    """Test reported coordinates against NYC's Manhattan borough boundary."""
+    import json
+    from pathlib import Path
+    import numpy as np
+    from matplotlib.path import Path as PolygonPath
+
+    path = Path(__file__).with_name("inputs") / "manhattan.geojson"
+    geometry = json.loads(path.read_text())
+    points = frame[["longitude", "latitude"]].to_numpy()
+    matches = np.zeros(len(points), dtype=bool)
+    for shell, *holes in geometry["coordinates"]:
+        vertices = np.asarray(shell)
+        indices = np.flatnonzero(((points >= vertices.min(axis=0))
+                                  & (points <= vertices.max(axis=0))).all(axis=1))
+        inside = PolygonPath(vertices).contains_points(points[indices])
+        for hole in holes:
+            inside &= ~PolygonPath(hole).contains_points(points[indices])
+        matches[indices] |= inside
+    return matches
